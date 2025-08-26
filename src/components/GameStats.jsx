@@ -4,6 +4,67 @@ import PlayerTimer from "./PlayerTimer"; // Player Minutes
 import GameHistory from "./GameHistory"; // Game History Component
 import { CSVLink } from "react-csv";
 
+// IndexedDB storage functions
+const initDB = () => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('SoccerStatsDB', 1);
+    
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('games')) {
+        db.createObjectStore('games', { keyPath: 'id', autoIncrement: true });
+      }
+    };
+  });
+};
+
+const saveToIndexedDB = async (games) => {
+  try {
+    const db = await initDB();
+    const transaction = db.transaction(['games'], 'readwrite');
+    const store = transaction.objectStore('games');
+    await store.clear();
+    await store.add({ id: 1, games: games });
+    return true;
+  } catch (error) {
+    console.error('IndexedDB save failed:', error);
+    // Fallback to localStorage
+    try {
+      localStorage.setItem('soccerStatsSavedGames', JSON.stringify(games));
+      return true;
+    } catch (localError) {
+      console.error('Both IndexedDB and localStorage failed:', localError);
+      return false;
+    }
+  }
+};
+
+const loadFromIndexedDB = async () => {
+  try {
+    const db = await initDB();
+    const transaction = db.transaction(['games'], 'readonly');
+    const store = transaction.objectStore('games');
+    const result = await new Promise((resolve, reject) => {
+      const request = store.get(1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    return result?.games || [];
+  } catch (error) {
+    console.error('IndexedDB load failed, trying localStorage:', error);
+    try {
+      const saved = localStorage.getItem('soccerStatsSavedGames');
+      return saved ? JSON.parse(saved) : [];
+    } catch (localError) {
+      console.error('Both IndexedDB and localStorage failed:', localError);
+      return [];
+    }
+  }
+};
+
 export default function GameStats() {
   // Game info
   const [date, setDate] = useState(() => {
@@ -20,6 +81,7 @@ export default function GameStats() {
   });
   const [playerName, setPlayerName] = useState("");
   const [opponent, setOpponent] = useState("");
+  const [gameType, setGameType] = useState("League");
 
   // Timer states (receive from child components via callbacks)
   const [halftimeMinutes, setHalftimeMinutes] = useState(30);
@@ -99,6 +161,16 @@ export default function GameStats() {
   const [cards, setCards] = useState(0);
   const [gkShotsSaved, setGkShotsSaved] = useState(0);
   const [gkGoalsAgainst, setGkGoalsAgainst] = useState(0);
+  const [shotsOnFrameLeft, setShotsOnFrameLeft] = useState(0);
+  const [shotsOnFrameRight, setShotsOnFrameRight] = useState(0);
+  const [shotsOffFrameLeft, setShotsOffFrameLeft] = useState(0);
+  const [shotsOffFrameRight, setShotsOffFrameRight] = useState(0);
+  const [headersMade, setHeadersMade] = useState(0);
+  const [headerGoals, setHeaderGoals] = useState(0);
+  const [pksTaken, setPksTaken] = useState(0);
+  const [pksMade, setPksMade] = useState(0);
+  const [freeKicksTaken, setFreeKicksTaken] = useState(0);
+  const [freeKicksMade, setFreeKicksMade] = useState(0);
 
   // Saved games
   const [savedGames, setSavedGames] = useState([]);
@@ -115,37 +187,36 @@ export default function GameStats() {
   };
 
   // Load saved games from localStorage on component mount
-  useEffect(() => {
+ // Load saved games from IndexedDB on component mount
+// Load saved games from IndexedDB on component mount
+useEffect(() => {
+  const loadGames = async () => {
     try {
-      const saved = localStorage.getItem('soccerStatsSavedGames');
-      if (saved) {
-        const parsedGames = JSON.parse(saved);
-        if (Array.isArray(parsedGames)) {
-          setSavedGames(parsedGames);
-        }
+      const games = await loadFromIndexedDB();
+      if (Array.isArray(games) && games.length > 0) {
+        setSavedGames(games);
       }
     } catch (error) {
       console.error('Error loading saved games:', error);
-      // Try to recover by clearing corrupted data
-      try {
-        localStorage.removeItem('soccerStatsSavedGames');
-      } catch (clearError) {
-        console.error('Could not clear corrupted localStorage:', clearError);
-      }
     }
-  }, []);
+  };
+  
+  loadGames();
+}, []);
 
   // Save to localStorage whenever savedGames changes
-  useEffect(() => {
-    try {
-      localStorage.setItem('soccerStatsSavedGames', JSON.stringify(savedGames));
-    } catch (error) {
-      console.error('Error saving games to localStorage:', error);
-      if (error.name === 'QuotaExceededError') {
-        alert('Storage quota exceeded. Please export your data and clear old games.');
+ useEffect(() => {
+  if (savedGames.length > 0) {
+    const saveGames = async () => {
+      const success = await saveToIndexedDB(savedGames);
+      if (!success) {
+        alert('Failed to save game data. Please export your data as backup.');
       }
-    }
-  }, [savedGames]);
+    };
+    
+    saveGames();
+  }
+}, [savedGames]);
 
   // Helpers with validation
   const increment = (setter, value) => setter(value + 1);
@@ -235,6 +306,7 @@ export default function GameStats() {
       date,
       playerName,
       opponent,
+      gameType,
       // Game result data
       ourGoals: ourGoalCount,
       theirGoals: theirGoalCount,
@@ -289,21 +361,172 @@ export default function GameStats() {
     setTheirGoals([]);
   };
 
-  const clearAllData = () => {
-    if (window.confirm('Are you sure you want to clear all saved games? This cannot be undone.')) {
-      setSavedGames([]);
+const clearAllData = async () => {
+  if (window.confirm('Are you sure you want to clear all saved games? This cannot be undone.')) {
+    setSavedGames([]);
+    // Clear from both IndexedDB and localStorage
+    try {
+      const db = await initDB();
+      const transaction = db.transaction(['games'], 'readwrite');
+      transaction.objectStore('games').clear();
+    } catch (error) {
       localStorage.removeItem('soccerStatsSavedGames');
     }
+  }
+};
+
+// Handle game updates from GameHistory component
+const handleGameUpdate = (gameIndex, updatedGame) => {
+  const newSavedGames = [...savedGames];
+  newSavedGames[gameIndex] = updatedGame;
+  setSavedGames(newSavedGames);
+};
+
+// Handle game deletion from GameHistory component
+const handleGameDelete = (gameIndex) => {
+  const newSavedGames = savedGames.filter((_, index) => index !== gameIndex);
+  setSavedGames(newSavedGames);
+};
+  // Enhanced export functionality
+  const [exportOptions, setExportOptions] = useState({
+    startDate: '',
+    endDate: '',
+    selectedOpponent: '',
+    exportType: 'all'
+  });
+  const [showExportModal, setShowExportModal] = useState(false);
+
+  // Generate full data backup for import/export
+  const generateFullBackup = () => {
+    const backup = {
+      version: "1.0.0",
+      exportDate: new Date().toISOString(),
+      exportType: "full_backup",
+      metadata: {
+        totalGames: savedGames.length,
+        dateRange: savedGames.length > 0 ? {
+          earliest: savedGames[savedGames.length - 1]?.date,
+          latest: savedGames[0]?.date
+        } : null,
+        players: getUniquePlayerNames(),
+        opponents: getUniqueOpponents()
+      },
+      savedGames: savedGames,
+      settings: {
+        // Future: user preferences, default timer settings, etc.
+      }
+    };
+    return backup;
   };
 
-  // Handle game updates from GameHistory component
-  const handleGameUpdate = (gameIndex, updatedGame) => {
-    const newSavedGames = [...savedGames];
-    newSavedGames[gameIndex] = updatedGame;
-    setSavedGames(newSavedGames);
+  // Download JSON file
+  const downloadJSON = (data, filename) => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
-  // Enhanced CSV export function with memory optimization
+  // Export full backup
+  const exportFullBackup = () => {
+    const backup = generateFullBackup();
+    const filename = `soccer-backup-${new Date().toISOString().split('T')[0]}.json`;
+    downloadJSON(backup, filename);
+  };
+
+  // Filter games based on export options
+  const getFilteredGames = () => {
+    let filtered = [...savedGames];
+
+    // Filter by date range
+    if (exportOptions.startDate) {
+      filtered = filtered.filter(game => game.date >= exportOptions.startDate);
+    }
+    if (exportOptions.endDate) {
+      filtered = filtered.filter(game => game.date <= exportOptions.endDate);
+    }
+
+    // Filter by opponent
+    if (exportOptions.selectedOpponent) {
+      filtered = filtered.filter(game => game.opponent === exportOptions.selectedOpponent);
+    }
+
+    return filtered;
+  };
+
+  // Export filtered data
+  const exportFilteredData = () => {
+    const filteredGames = getFilteredGames();
+    
+    if (filteredGames.length === 0) {
+      alert('No games match the selected criteria.');
+      return;
+    }
+
+    const backup = {
+      version: "1.0.0",
+      exportDate: new Date().toISOString(),
+      exportType: "filtered",
+      filters: exportOptions,
+      metadata: {
+        totalGames: filteredGames.length,
+        originalTotal: savedGames.length
+      },
+      savedGames: filteredGames
+    };
+
+    const filename = `soccer-filtered-${new Date().toISOString().split('T')[0]}.json`;
+    downloadJSON(backup, filename);
+    setShowExportModal(false);
+  };
+
+  // Generate detailed report
+  const generateDetailedReport = () => {
+    const games = getFilteredGames();
+    if (games.length === 0) {
+      alert('No games match the selected criteria.');
+      return;
+    }
+
+    const wins = games.filter(g => g.gameResult === 'Win').length;
+    const losses = games.filter(g => g.gameResult === 'Loss').length;
+    const ties = games.filter(g => g.gameResult === 'Tie').length;
+
+    const report = {
+      reportDate: new Date().toISOString(),
+      summary: {
+        totalGames: games.length,
+        record: `${wins}W-${losses}L-${ties}T`,
+        winPercentage: games.length > 0 ? ((wins / games.length) * 100).toFixed(1) + '%' : '0%'
+      },
+      totals: {
+        goalsScored: games.reduce((sum, game) => sum + (game.ourGoals || 0), 0),
+        goalsAgainst: games.reduce((sum, game) => sum + (game.theirGoals || 0), 0),
+        personalGoals: games.reduce((sum, game) => sum + (game.totalGoals || 0), 0),
+        assists: games.reduce((sum, game) => sum + (game.assists || 0), 0),
+        shots: games.reduce((sum, game) => sum + (game.totalShots || 0), 0),
+        corners: games.reduce((sum, game) => sum + (game.cornersTaken || 0), 0),
+        cornerGoals: games.reduce((sum, game) => sum + (game.cornerConversions || 0), 0)
+      },
+      averages: {
+        goalsPerGame: games.length > 0 ? (games.reduce((sum, game) => sum + (game.ourGoals || 0), 0) / games.length).toFixed(1) : '0',
+        personalGoalsPerGame: games.length > 0 ? (games.reduce((sum, game) => sum + (game.totalGoals || 0), 0) / games.length).toFixed(1) : '0',
+        assistsPerGame: games.length > 0 ? (games.reduce((sum, game) => sum + (game.assists || 0), 0) / games.length).toFixed(1) : '0'
+      },
+      games: games
+    };
+
+    const filename = `soccer-report-${new Date().toISOString().split('T')[0]}.json`;
+    downloadJSON(report, filename);
+    setShowExportModal(false);
+  };
+
+  // Enhanced CSV generation - Fixed with proper function declaration
   const generateEnhancedCSV = () => {
     if (savedGames.length === 0) return [];
 
@@ -446,6 +669,20 @@ export default function GameStats() {
             ))}
           </datalist>
         </div>
+
+        {/* Game Type dropdown */}
+<div className="relative">
+  <select
+    value={gameType}
+    onChange={(e) => setGameType(e.target.value)}
+    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+  >
+    <option value="League">League</option>
+    <option value="Tournament">Tournament</option>
+    <option value="Showcase">Showcase</option>
+    <option value="Scrimmage">Scrimmage</option>
+  </select>
+</div>
       </div>
 
       {/* Timers - using CSS Grid for perfect alignment */}
@@ -470,18 +707,26 @@ export default function GameStats() {
       {/* Stats two-column layout with accessibility */}
       <div className="grid grid-cols-2 gap-4 mb-4">
         {[
-          { label: "Goals Left Foot", value: goalsLeft, setter: setGoalsLeft },
-          { label: "Goals Right Foot", value: goalsRight, setter: setGoalsRight },
-          { label: "Shots Left Foot", value: shotsLeft, setter: setShotsLeft },
-          { label: "Shots Right Foot", value: shotsRight, setter: setShotsRight },
-          { label: "Assists", value: assists, setter: setAssists },
-          { label: "Pass Completions", value: passCompletions, setter: setPassCompletions },
-          { label: "Corners Taken", value: cornersTaken, setter: setCornersTaken },
-          { label: "Corner Conversions", value: cornerConversions, setter: setCornerConversions },
-          { label: "Fouls", value: fouls, setter: setFouls },
-          { label: "Red/Yellow Cards", value: cards, setter: setCards },
-          { label: "GK - Shots Saved", value: gkShotsSaved, setter: setGkShotsSaved },
-          { label: "GK - Goals Against", value: gkGoalsAgainst, setter: setGkGoalsAgainst },
+  { label: "Goals Left Foot", value: goalsLeft, setter: setGoalsLeft },
+  { label: "Goals Right Foot", value: goalsRight, setter: setGoalsRight },
+  { label: "Shots On Frame Left", value: shotsOnFrameLeft, setter: setShotsOnFrameLeft },
+  { label: "Shots On Frame Right", value: shotsOnFrameRight, setter: setShotsOnFrameRight },
+  { label: "Shots Off Frame Left", value: shotsOffFrameLeft, setter: setShotsOffFrameLeft },
+  { label: "Shots Off Frame Right", value: shotsOffFrameRight, setter: setShotsOffFrameRight },
+  { label: "Assists", value: assists, setter: setAssists },
+  { label: "Pass Completions", value: passCompletions, setter: setPassCompletions },
+  { label: "Corners Taken", value: cornersTaken, setter: setCornersTaken },
+  { label: "Corner Conversions", value: cornerConversions, setter: setCornerConversions },
+  { label: "Headers Made", value: headersMade, setter: setHeadersMade },
+  { label: "Header Goals", value: headerGoals, setter: setHeaderGoals },
+  { label: "PKs Taken", value: pksTaken, setter: setPksTaken },
+  { label: "PKs Made", value: pksMade, setter: setPksMade },
+  { label: "Free Kicks Taken", value: freeKicksTaken, setter: setFreeKicksTaken },
+  { label: "Free Kicks Made", value: freeKicksMade, setter: setFreeKicksMade },
+  { label: "Fouls", value: fouls, setter: setFouls },
+  { label: "Red/Yellow Cards", value: cards, setter: setCards },
+  { label: "GK - Shots Saved", value: gkShotsSaved, setter: setGkShotsSaved },
+  { label: "GK - Goals Against", value: gkGoalsAgainst, setter: setGkGoalsAgainst },
         ].map((stat, index) => (
           <div key={index} className="flex flex-col items-center">
             <label className="mb-1 font-medium text-center" id={`stat-${index}-label`}>
@@ -599,91 +844,222 @@ export default function GameStats() {
       </div>
 
       {/* Save Game / Export / Clear */}
-      <div className="flex justify-center mb-4 gap-2 flex-wrap">
-        <button
-          className="bg-blue-600 text-white px-6 py-2 rounded-lg"
-          onClick={saveGame}
-        >
-          Save Game
-        </button>
+      <div className="space-y-3 mb-4">
+        <div className="flex justify-center gap-2 flex-wrap">
+          <button
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg"
+            onClick={saveGame}
+          >
+            Save Game
+          </button>
+        </div>
+
         {savedGames.length > 0 && (
-          <>
-            <CSVLink
-              data={generateEnhancedCSV()}
-              filename={`soccer_stats_${new Date().toISOString().split('T')[0]}.csv`}
-              className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm"
-            >
-              Export CSV
-            </CSVLink>
-            <CSVLink
-              data={savedGames}
-              filename={`soccer_stats_raw_${new Date().toISOString().split('T')[0]}.csv`}
-              className="bg-gray-600 text-white px-3 py-2 rounded-lg text-xs"
-            >
-              Raw Data
-            </CSVLink>
-            <button
-              className="bg-red-600 text-white px-4 py-2 rounded-lg"
-              onClick={clearAllData}
-            >
-              Clear All
-            </button>
-          </>
+          <div className="border rounded-lg p-4 bg-gray-50">
+            <h3 className="font-semibold mb-3 text-center">Export Options</h3>
+            
+            {/* Quick Export Buttons */}
+            <div className="flex justify-center gap-2 flex-wrap mb-3">
+              <button
+                onClick={exportFullBackup}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm"
+                title="Download complete backup file"
+              >
+                Full Backup
+              </button>
+              
+              <CSVLink
+                data={generateEnhancedCSV()}
+                filename={`soccer_stats_${new Date().toISOString().split('T')[0]}.csv`}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm"
+              >
+                Export CSV
+              </CSVLink>
+
+              <button
+                onClick={() => setShowExportModal(true)}
+                className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm"
+              >
+                Custom Export
+              </button>
+            </div>
+
+            {/* Additional Options */}
+            <div className="flex justify-center gap-2 flex-wrap">
+              <CSVLink
+                data={savedGames}
+                filename={`soccer_stats_raw_${new Date().toISOString().split('T')[0]}.csv`}
+                className="bg-gray-600 text-white px-3 py-2 rounded-lg text-xs"
+              >
+                Raw Data
+              </CSVLink>
+              
+              <button
+                className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm"
+                onClick={clearAllData}
+              >
+                Clear All
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Live Dashboard */}
-      {savedGames.length > 0 && (
-        <div className="mb-6 border rounded-lg p-4 bg-green-50">
-          <h2 className="text-lg font-bold mb-3 text-center">Season Dashboard</h2>
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{savedGames.length}</div>
-              <div className="text-sm text-gray-600">Games Played</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-semibold">
-                <span className="text-green-600">{savedGames.filter(g => g.gameResult === 'Win').length}W</span>
-                <span className="mx-1">-</span>
-                <span className="text-red-600">{savedGames.filter(g => g.gameResult === 'Loss').length}L</span>
-                <span className="mx-1">-</span>
-                <span className="text-gray-600">{savedGames.filter(g => g.gameResult === 'Tie').length}T</span>
+      {/* Export Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+            <h3 className="text-lg font-bold mb-4">Custom Export Options</h3>
+            
+            {/* Date Range */}
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Start Date (optional)</label>
+                <input
+                  type="date"
+                  value={exportOptions.startDate}
+                  onChange={(e) => setExportOptions({...exportOptions, startDate: e.target.value})}
+                  className="w-full p-2 border rounded"
+                />
               </div>
-              <div className="text-sm text-gray-600">Record</div>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-            <div>
-              <div className="text-xl font-bold text-orange-600">
-                {savedGames.reduce((sum, game) => sum + (game.ourGoals || 0), 0)}
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">End Date (optional)</label>
+                <input
+                  type="date"
+                  value={exportOptions.endDate}
+                  onChange={(e) => setExportOptions({...exportOptions, endDate: e.target.value})}
+                  className="w-full p-2 border rounded"
+                />
               </div>
-              <div className="text-xs text-gray-600">Goals Scored</div>
             </div>
-            <div>
-              <div className="text-xl font-bold text-purple-600">
-                {savedGames.reduce((sum, game) => sum + (game.assists || 0), 0)}
-              </div>
-              <div className="text-xs text-gray-600">Assists</div>
+
+            {/* Opponent Filter */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-1">Opponent (optional)</label>
+              <select
+                value={exportOptions.selectedOpponent}
+                onChange={(e) => setExportOptions({...exportOptions, selectedOpponent: e.target.value})}
+                className="w-full p-2 border rounded"
+              >
+                <option value="">All Opponents</option>
+                {getUniqueOpponents().map(opponent => (
+                  <option key={opponent} value={opponent}>{opponent}</option>
+                ))}
+              </select>
             </div>
-            <div>
-              <div className="text-xl font-bold text-indigo-600">
-                {savedGames.reduce((sum, game) => sum + (game.totalShots || 0), 0)}
-              </div>
-              <div className="text-xs text-gray-600">Shots Taken</div>
+
+            {/* Preview */}
+            <div className="mb-4 p-3 bg-gray-100 rounded">
+              <p className="text-sm text-gray-700">
+                <strong>Preview:</strong> {getFilteredGames().length} games match your criteria
+              </p>
             </div>
-            <div>
-              <div className="text-xl font-bold text-teal-600">
-                {savedGames.reduce((sum, game) => sum + (game.cornerConversions || 0), 0)}
-              </div>
-              <div className="text-xs text-gray-600">Corner Goals</div>
+
+            {/* Export Buttons */}
+            <div className="space-y-2">
+              <button
+                onClick={exportFilteredData}
+                className="w-full bg-blue-600 text-white py-2 rounded-lg"
+                disabled={getFilteredGames().length === 0}
+              >
+                Export Filtered Games (JSON)
+              </button>
+              
+              <button
+                onClick={generateDetailedReport}
+                className="w-full bg-green-600 text-white py-2 rounded-lg"
+                disabled={getFilteredGames().length === 0}
+              >
+                Generate Report (JSON)
+              </button>
+              
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="w-full bg-gray-500 text-white py-2 rounded-lg"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
       )}
 
+  {/* Live Dashboard */}
+{savedGames.length > 0 && (
+  <div className="mb-6 border rounded-lg p-4 bg-green-50">
+    <h2 className="text-lg font-bold mb-3 text-center">Season Dashboard</h2>
+    <div className="grid grid-cols-2 gap-4 mb-4">
+      <div className="text-center">
+        <div className="text-2xl font-bold text-blue-600">{savedGames.length}</div>
+        <div className="text-sm text-gray-600">Games Played</div>
+      </div>
+      <div className="text-center">
+        <div className="text-lg font-semibold">
+          <span className="text-green-600">{savedGames.filter(g => g.gameResult === 'Win').length}W</span>
+          <span className="mx-1">-</span>
+          <span className="text-red-600">{savedGames.filter(g => g.gameResult === 'Loss').length}L</span>
+          <span className="mx-1">-</span>
+          <span className="text-gray-600">{savedGames.filter(g => g.gameResult === 'Tie').length}T</span>
+        </div>
+        <div className="text-sm text-gray-600">Record</div>
+      </div>
+    </div>
+    
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center mb-4">
+      <div>
+        <div className="text-xl font-bold text-orange-600">
+          {savedGames.reduce((sum, game) => sum + (game.ourGoals || 0), 0)}
+        </div>
+        <div className="text-xs text-gray-600">Goals Scored</div>
+      </div>
+      <div>
+        <div className="text-xl font-bold text-purple-600">
+          {savedGames.reduce((sum, game) => sum + (game.assists || 0), 0)}
+        </div>
+        <div className="text-xs text-gray-600">Assists</div>
+      </div>
+      <div>
+        <div className="text-xl font-bold text-indigo-600">
+          {savedGames.reduce((sum, game) => sum + (game.totalShots || 0), 0)}
+        </div>
+        <div className="text-xs text-gray-600">Shots Taken</div>
+      </div>
+      <div>
+        <div className="text-xl font-bold text-teal-600">
+          {savedGames.reduce((sum, game) => sum + (game.cornerConversions || 0), 0)}
+        </div>
+        <div className="text-xs text-gray-600">Corner Goals</div>
+      </div>
+    </div>
+
+    {/* Game Type Breakdown */}
+    <div className="p-3 bg-blue-50 rounded">
+      <h3 className="font-semibold mb-3 text-center text-sm">By Game Type</h3>
+      <div className="space-y-2">
+        {['League', 'Tournament', 'Showcase', 'Scrimmage'].map(type => {
+          const typeGames = savedGames.filter(g => g.gameType === type);
+          if (typeGames.length === 0) return null;
+          
+          const typeWins = typeGames.filter(g => g.gameResult === 'Win').length;
+          const typeLosses = typeGames.filter(g => g.gameResult === 'Loss').length;
+          const typeTies = typeGames.filter(g => g.gameResult === 'Tie').length;
+          
+          return (
+            <div key={type} className="flex justify-between items-center text-sm">
+              <span className="font-medium">{type}:</span>
+              <span className="text-xs">
+                {typeGames.length} games ({typeWins}W-{typeLosses}L-{typeTies}T)
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  </div>
+)}
       {/* Game History */}
-      <GameHistory savedGames={savedGames} onUpdateGame={handleGameUpdate} />
+      <GameHistory savedGames={savedGames} onUpdateGame={handleGameUpdate} onDeleteGame={handleGameDelete} />
     </div>
   );
 }
