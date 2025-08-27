@@ -432,6 +432,32 @@ const handleGameDelete = (gameIndex) => {
     URL.revokeObjectURL(url);
   };
 
+  // NEW: Download CSV file function
+  const downloadCSV = (csvData, filename) => {
+    // Convert array of objects to CSV string
+    const headers = Object.keys(csvData[0]).join(',');
+    const rows = csvData.map(row => 
+      Object.values(row).map(value => {
+        // Escape commas and quotes in CSV data
+        if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
+          return `"${value.replace(/"/g, '""')}"`;
+        }
+        return value;
+      }).join(',')
+    );
+    
+    const csvString = [headers, ...rows].join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // Export full backup
   const exportFullBackup = () => {
     const backup = generateFullBackup();
@@ -459,7 +485,84 @@ const handleGameDelete = (gameIndex) => {
     return filtered;
   };
 
-  // Export filtered data
+  // NEW: Generate CSV from filtered games
+  const generateFilteredCSV = (games) => {
+    if (games.length === 0) return [];
+
+    return games.map((game, index) => {
+      const goalTimeline = game.goalHistory ? 
+        [...(game.goalHistory.our || []).map(g => `${g.time} Us`), 
+         ...(game.goalHistory.their || []).map(g => `${g.time} Them`)]
+        .sort()
+        .join('; ') : 'No goals recorded';
+
+      return {
+        'Game #': games.length - index,
+        'Date': sanitizeInput(game.date) || 'Not set',
+        'Player Name': sanitizeInput(game.playerName) || 'Not set',
+        'Opponent': sanitizeInput(game.opponent) || 'Not set',
+        'Game Type': game.gameType || 'League',
+        'Result': game.gameResult || 'Unknown',
+        'Final Score (Us-Them)': `${game.ourGoals || 0}-${game.theirGoals || 0}`,
+        'Goals Scored (Team)': game.ourGoals || 0,
+        'Goals Against (Team)': game.theirGoals || 0,
+        'Personal Goals Left Foot': game.goalsLeft || 0,
+        'Personal Goals Right Foot': game.goalsRight || 0,
+        'Total Personal Goals': game.totalGoals || 0,
+        'Shots Left Foot': game.shotsLeft || 0,
+        'Shots Right Foot': game.shotsRight || 0,
+        'Total Shots': game.totalShots || 0,
+        'Goal Conversion Rate': game.goalConversionRate || '0%',
+        'Assists': game.assists || 0,
+        'Pass Completions': game.passCompletions || 0,
+        'Corners Taken': game.cornersTaken || 0,
+        'Corner Conversions': game.cornerConversions || 0,
+        'Corner Conversion Rate': game.cornerConversionRate || '0%',
+        'Fouls': game.fouls || 0,
+        'Cards (Red/Yellow)': game.cards || 0,
+        'GK Shots Saved': game.gkShotsSaved || 0,
+        'GK Goals Against': game.gkGoalsAgainst || 0,
+        'Player Minutes Played': game.playerMinutesPlayed || '0:00',
+        'Halftime Duration': `${game.halftimeMinutes || 0} min`,
+        'Halftime Completed': game.halftimeComplete ? 'Yes' : 'No',
+        'Goal Timeline': sanitizeInput(goalTimeline)
+      };
+    });
+  };
+
+  // NEW: Generate detailed report CSV
+  const generateDetailedReportCSV = (games) => {
+    if (games.length === 0) return [];
+
+    const wins = games.filter(g => g.gameResult === 'Win').length;
+    const losses = games.filter(g => g.gameResult === 'Loss').length;
+    const ties = games.filter(g => g.gameResult === 'Tie').length;
+    const winPercentage = games.length > 0 ? ((wins / games.length) * 100).toFixed(1) + '%' : '0%';
+
+    // Summary row
+    const summaryRow = {
+      'Report Type': 'SUMMARY STATISTICS',
+      'Total Games': games.length,
+      'Record': `${wins}W-${losses}L-${ties}T`,
+      'Win Percentage': winPercentage,
+      'Team Goals Scored': games.reduce((sum, game) => sum + (game.ourGoals || 0), 0),
+      'Team Goals Against': games.reduce((sum, game) => sum + (game.theirGoals || 0), 0),
+      'Personal Goals': games.reduce((sum, game) => sum + (game.totalGoals || 0), 0),
+      'Total Assists': games.reduce((sum, game) => sum + (game.assists || 0), 0),
+      'Total Shots': games.reduce((sum, game) => sum + (game.totalShots || 0), 0),
+      'Corner Goals': games.reduce((sum, game) => sum + (game.cornerConversions || 0), 0),
+      'Avg Goals Per Game': games.length > 0 ? (games.reduce((sum, game) => sum + (game.ourGoals || 0), 0) / games.length).toFixed(1) : '0',
+      'Avg Personal Goals': games.length > 0 ? (games.reduce((sum, game) => sum + (game.totalGoals || 0), 0) / games.length).toFixed(1) : '0',
+      'Avg Assists Per Game': games.length > 0 ? (games.reduce((sum, game) => sum + (game.assists || 0), 0) / games.length).toFixed(1) : '0'
+    };
+
+    // Game details
+    const gameRows = generateFilteredCSV(games);
+
+    return [summaryRow, ...gameRows];
+  };
+
+  // MODIFIED: Export filtered data as CSV
   const exportFilteredData = () => {
     const filteredGames = getFilteredGames();
     
@@ -468,24 +571,13 @@ const handleGameDelete = (gameIndex) => {
       return;
     }
 
-    const backup = {
-      version: "1.0.0",
-      exportDate: new Date().toISOString(),
-      exportType: "filtered",
-      filters: exportOptions,
-      metadata: {
-        totalGames: filteredGames.length,
-        originalTotal: savedGames.length
-      },
-      savedGames: filteredGames
-    };
-
-    const filename = `soccer-filtered-${new Date().toISOString().split('T')[0]}.json`;
-    downloadJSON(backup, filename);
+    const csvData = generateFilteredCSV(filteredGames);
+    const filename = `soccer-filtered-${new Date().toISOString().split('T')[0]}.csv`;
+    downloadCSV(csvData, filename);
     setShowExportModal(false);
   };
 
-  // Generate detailed report
+  // MODIFIED: Generate detailed report as CSV
   const generateDetailedReport = () => {
     const games = getFilteredGames();
     if (games.length === 0) {
@@ -493,36 +585,9 @@ const handleGameDelete = (gameIndex) => {
       return;
     }
 
-    const wins = games.filter(g => g.gameResult === 'Win').length;
-    const losses = games.filter(g => g.gameResult === 'Loss').length;
-    const ties = games.filter(g => g.gameResult === 'Tie').length;
-
-    const report = {
-      reportDate: new Date().toISOString(),
-      summary: {
-        totalGames: games.length,
-        record: `${wins}W-${losses}L-${ties}T`,
-        winPercentage: games.length > 0 ? ((wins / games.length) * 100).toFixed(1) + '%' : '0%'
-      },
-      totals: {
-        goalsScored: games.reduce((sum, game) => sum + (game.ourGoals || 0), 0),
-        goalsAgainst: games.reduce((sum, game) => sum + (game.theirGoals || 0), 0),
-        personalGoals: games.reduce((sum, game) => sum + (game.totalGoals || 0), 0),
-        assists: games.reduce((sum, game) => sum + (game.assists || 0), 0),
-        shots: games.reduce((sum, game) => sum + (game.totalShots || 0), 0),
-        corners: games.reduce((sum, game) => sum + (game.cornersTaken || 0), 0),
-        cornerGoals: games.reduce((sum, game) => sum + (game.cornerConversions || 0), 0)
-      },
-      averages: {
-        goalsPerGame: games.length > 0 ? (games.reduce((sum, game) => sum + (game.ourGoals || 0), 0) / games.length).toFixed(1) : '0',
-        personalGoalsPerGame: games.length > 0 ? (games.reduce((sum, game) => sum + (game.totalGoals || 0), 0) / games.length).toFixed(1) : '0',
-        assistsPerGame: games.length > 0 ? (games.reduce((sum, game) => sum + (game.assists || 0), 0) / games.length).toFixed(1) : '0'
-      },
-      games: games
-    };
-
-    const filename = `soccer-report-${new Date().toISOString().split('T')[0]}.json`;
-    downloadJSON(report, filename);
+    const csvData = generateDetailedReportCSV(games);
+    const filename = `soccer-report-${new Date().toISOString().split('T')[0]}.csv`;
+    downloadCSV(csvData, filename);
     setShowExportModal(false);
   };
 
@@ -956,14 +1021,14 @@ const handleGameDelete = (gameIndex) => {
               </p>
             </div>
 
-            {/* Export Buttons */}
+            {/* Export Buttons - UPDATED TO CSV */}
             <div className="space-y-2">
               <button
                 onClick={exportFilteredData}
                 className="w-full bg-blue-600 text-white py-2 rounded-lg"
                 disabled={getFilteredGames().length === 0}
               >
-                Export Filtered Games (JSON)
+                Export Filtered Games (CSV)
               </button>
               
               <button
@@ -971,7 +1036,7 @@ const handleGameDelete = (gameIndex) => {
                 className="w-full bg-green-600 text-white py-2 rounded-lg"
                 disabled={getFilteredGames().length === 0}
               >
-                Generate Report (JSON)
+                Generate Report (CSV)
               </button>
               
               <button
