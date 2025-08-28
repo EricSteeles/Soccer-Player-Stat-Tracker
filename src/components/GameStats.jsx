@@ -172,6 +172,9 @@ export default function GameStats() {
   const [freeKicksTaken, setFreeKicksTaken] = useState(0);
   const [freeKicksMade, setFreeKicksMade] = useState(0);
 
+  // NEW: Game notes field
+  const [gameNotes, setGameNotes] = useState("");
+
   // Saved games
   const [savedGames, setSavedGames] = useState([]);
 
@@ -335,6 +338,8 @@ useEffect(() => {
       cards,
       gkShotsSaved,
       gkGoalsAgainst,
+      // NEW: Include game notes
+      gameNotes: sanitizeInput(gameNotes),
       // Calculated stats
       totalGoals: goalsLeft + goalsRight,
       totalShots: shotsLeft + shotsRight,
@@ -359,6 +364,8 @@ useEffect(() => {
     // Reset goal tracking
     setOurGoals([]);
     setTheirGoals([]);
+    // NEW: Reset game notes
+    setGameNotes("");
   };
 
 const clearAllData = async () => {
@@ -525,7 +532,8 @@ const handleGameDelete = (gameIndex) => {
         'Player Minutes Played': game.playerMinutesPlayed || '0:00',
         'Halftime Duration': `${game.halftimeMinutes || 0} min`,
         'Halftime Completed': game.halftimeComplete ? 'Yes' : 'No',
-        'Goal Timeline': sanitizeInput(goalTimeline)
+        'Goal Timeline': sanitizeInput(goalTimeline),
+        'Game Notes': sanitizeInput(game.gameNotes) || 'No notes'
       };
     });
   };
@@ -637,7 +645,8 @@ const handleGameDelete = (gameIndex) => {
           'Player Minutes Played': game.playerMinutesPlayed || '0:00',
           'Halftime Duration': `${game.halftimeMinutes || 0} min`,
           'Halftime Completed': game.halftimeComplete ? 'Yes' : 'No',
-          'Goal Timeline': sanitizeInput(goalTimeline)
+          'Goal Timeline': sanitizeInput(goalTimeline),
+          'Game Notes': sanitizeInput(game.gameNotes) || 'No notes'
         };
       });
       chunks.push(...processedChunk);
@@ -678,7 +687,8 @@ const handleGameDelete = (gameIndex) => {
       'Player Minutes Played': '',
       'Halftime Duration': '',
       'Halftime Completed': '',
-      'Goal Timeline': ''
+      'Goal Timeline': '',
+      'Game Notes': ''
     };
 
     return [summaryRow, ...chunks];
@@ -824,6 +834,23 @@ const handleGameDelete = (gameIndex) => {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* NEW: Game Notes Field */}
+      <div className="mb-4">
+        <label htmlFor="gameNotes" className="block text-sm font-medium mb-2">Game Notes/Comments</label>
+        <textarea
+          id="gameNotes"
+          value={gameNotes}
+          onChange={(e) => setGameNotes(sanitizeInput(e.target.value))}
+          placeholder="Add notes about the game, memorable plays, conditions, etc."
+          className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+          rows="3"
+          maxLength={500}
+        />
+        <div className="text-xs text-gray-500 mt-1">
+          {gameNotes.length}/500 characters
+        </div>
       </div>
 
       {/* Goal Tracking with accessibility */}
