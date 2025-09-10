@@ -138,7 +138,6 @@ export default function Timers({ halftimeMinutes, setHalftimeMinutes, onTimeChan
     }
   };
 
-<<<<<<< HEAD
   const playVoiceCountdown = (message) => {
     if (!audioSupported || !audioPermissionGranted) return;
     
@@ -169,19 +168,6 @@ export default function Timers({ halftimeMinutes, setHalftimeMinutes, onTimeChan
       // Play completion sound and announce "Halftime Over!" when time reaches zero
       playCompletionSound();
       playVoiceCountdown("Halftime Over");
-=======
-  // Audio countdown effect
-  useEffect(() => {
-    if (isRunning && remainingSeconds <= 10 && remainingSeconds > 0) {
-      // Play ding for last 10 seconds, but only once per second
-      if (lastSecondPlayedRef.current !== remainingSeconds) {
-        playDing();
-        lastSecondPlayedRef.current = remainingSeconds;
-      }
-    } else if (isTimeUp && isRunning && lastSecondPlayedRef.current !== 0) {
-      // Play completion sound when time reaches zero
-      playCompletionSound();
->>>>>>> 4cee60769e08098acb41a438d09a58a05846ab53
       lastSecondPlayedRef.current = 0;
     }
   }, [remainingSeconds, isRunning, isTimeUp]);
@@ -318,8 +304,4 @@ export default function Timers({ halftimeMinutes, setHalftimeMinutes, onTimeChan
       </div>
     </div>
   );
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> 4cee60769e08098acb41a438d09a58a05846ab53
