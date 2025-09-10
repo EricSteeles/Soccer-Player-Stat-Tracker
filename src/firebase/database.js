@@ -81,23 +81,43 @@ const validateGameData = (gameData) => {
   return sanitized;
 };
 
-// Get device ID for offline-first approach (no user auth required)
-const getDeviceId = () => {
-  let deviceId = localStorage.getItem('soccerApp_deviceId');
-  if (!deviceId) {
-    deviceId = 'device_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
-    localStorage.setItem('soccerApp_deviceId', deviceId);
-  }
-  return deviceId;
+// Get user PIN for cross-device sync
+const getUserPin = () => {
+  return localStorage.getItem('soccerApp_userPin') || null;
+};
+
+// Set user PIN
+const setUserPin = (pin) => {
+  localStorage.setItem('soccerApp_userPin', pin);
 };
 
 // Database operations
 export const gameService = {
+  // Check if user has a PIN set
+  hasPin() {
+    return getUserPin() !== null;
+  },
+
+  // Set the user's PIN
+  setPin(pin) {
+    setUserPin(pin);
+  },
+
+  // Get current PIN (for display purposes)
+  getCurrentPin() {
+    return getUserPin();
+  },
+
   // Save a new game
   async saveGame(gameData) {
+    const userPin = getUserPin();
+    if (!userPin) {
+      throw new DatabaseError('No user PIN set');
+    }
+
     try {
       const validated = validateGameData(gameData);
-      validated.deviceId = getDeviceId();
+      validated.userPin = userPin;
       validated.createdAt = new Date();
       
       return await withRetry(async () => {
@@ -116,15 +136,18 @@ export const gameService = {
     }
   },
 
-  // Load all games for this device
+  // Load all games for this user PIN
   async loadGames() {
+    const userPin = getUserPin();
+    if (!userPin) {
+      throw new DatabaseError('No user PIN set');
+    }
+
     try {
-      const deviceId = getDeviceId();
-      
       return await withRetry(async () => {
         const q = query(
           collection(db, GAMES_COLLECTION),
-          where('deviceId', '==', deviceId),
+          where('userPin', '==', userPin),
           orderBy('createdAt', 'desc'),
           limit(1000) // Reasonable limit
         );
@@ -155,9 +178,15 @@ export const gameService = {
 
   // Update an existing game
   async updateGame(gameId, gameData) {
+    const userPin = getUserPin();
+    if (!userPin) {
+      throw new DatabaseError('No user PIN set');
+    }
+
     try {
       const validated = validateGameData(gameData);
       validated.lastModified = new Date();
+      validated.userPin = userPin; // Ensure PIN consistency
       
       return await withRetry(async () => {
         const gameRef = doc(db, GAMES_COLLECTION, gameId);
@@ -212,7 +241,7 @@ export const gameService = {
     return results;
   },
 
-  // Clear all games for this device
+  // Clear all games for this user
   async clearAllGames() {
     try {
       const games = await this.loadGames();
@@ -230,11 +259,16 @@ export const gameService = {
 
   // Real-time listener for games (optional feature)
   onGamesChange(callback) {
+    const userPin = getUserPin();
+    if (!userPin) {
+      callback(null, new DatabaseError('No user PIN set'));
+      return;
+    }
+
     try {
-      const deviceId = getDeviceId();
       const q = query(
         collection(db, GAMES_COLLECTION),
-        where('deviceId', '==', deviceId),
+        where('userPin', '==', userPin),
         orderBy('createdAt', 'desc')
       );
 

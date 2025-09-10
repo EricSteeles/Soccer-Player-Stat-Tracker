@@ -5,7 +5,7 @@ import GameHistory from "./GameHistory"; // Game History Component
 import { CSVLink } from "react-csv";
 import { gameService, DatabaseError } from "../firebase/database";
 
-export default function GameStats() {
+export default function GameStats({ userPin }) {
   // Game info
   const [date, setDate] = useState(() => {
     // Auto-populate with today's date in Pacific Time in YYYY-MM-DD format
@@ -168,7 +168,7 @@ export default function GameStats() {
       
       // Try fallback to localStorage for offline access
       try {
-        const fallback = localStorage.getItem('soccerStatsSavedGames');
+        const fallback = localStorage.getItem(`soccerStatsSavedGames_${userPin}`);
         if (fallback) {
           const fallbackGames = JSON.parse(fallback);
           setSavedGames(fallbackGames);
@@ -184,13 +184,15 @@ export default function GameStats() {
 
   // Initial load
   useEffect(() => {
-    loadGamesFromFirebase();
-  }, []);
+    if (userPin) {
+      loadGamesFromFirebase();
+    }
+  }, [userPin]);
 
-  // Fallback save to localStorage
+  // Fallback save to localStorage with PIN-specific key
   const saveToLocalStorage = (games) => {
     try {
-      localStorage.setItem('soccerStatsSavedGames', JSON.stringify(games));
+      localStorage.setItem(`soccerStatsSavedGames_${userPin}`, JSON.stringify(games));
       localStorage.setItem('soccerStatsLastSync', new Date().toISOString());
     } catch (error) {
       console.warn('Failed to save to localStorage:', error);
@@ -408,7 +410,7 @@ export default function GameStats() {
         setSyncStatus('syncing');
         await gameService.clearAllGames();
         setSavedGames([]);
-        localStorage.removeItem('soccerStatsSavedGames');
+        localStorage.removeItem(`soccerStatsSavedGames_${userPin}`);
         setSyncStatus('synced');
         setLastSyncTime(new Date());
       } catch (error) {
@@ -486,6 +488,7 @@ export default function GameStats() {
       version: "1.0.0",
       exportDate: new Date().toISOString(),
       exportType: "full_backup",
+      userPin: userPin,
       metadata: {
         totalGames: savedGames.length,
         dateRange: savedGames.length > 0 ? {
@@ -520,7 +523,7 @@ export default function GameStats() {
   // Export full backup
   const exportFullBackup = () => {
     const backup = generateFullBackup();
-    const filename = `soccer-backup-${new Date().toISOString().split('T')[0]}.json`;
+    const filename = `soccer-backup-pin${userPin}-${new Date().toISOString().split('T')[0]}.json`;
     downloadJSON(backup, filename);
   };
 
@@ -571,7 +574,8 @@ export default function GameStats() {
           'Halftime Completed': game.halftimeComplete ? 'Yes' : 'No',
           'Goal Timeline': sanitizeInput(goalTimeline),
           'Game Notes': sanitizeInput(game.gameNotes) || 'No notes',
-          'Sync Status': game.id?.startsWith('local_') ? 'Local Only' : 'Synced'
+          'Sync Status': game.id?.startsWith('local_') ? 'Local Only' : 'Synced',
+          'User PIN': userPin
         };
       });
       chunks.push(...processedChunk);
@@ -615,7 +619,8 @@ export default function GameStats() {
       'Halftime Completed': '',
       'Goal Timeline': '',
       'Game Notes': '',
-      'Sync Status': networkStatus ? 'Online' : 'Offline'
+      'Sync Status': networkStatus ? 'Online' : 'Offline',
+      'User PIN': userPin
     };
 
     return [summaryRow, ...chunks];
@@ -627,7 +632,7 @@ export default function GameStats() {
       <div className="min-h-screen bg-gray-100 p-4 flex items-center justify-center">
         <div className="text-center">
           <div className="text-xl font-bold mb-2">Loading Soccer Stat Tracker...</div>
-          <div className="text-gray-600">Syncing your game data</div>
+          <div className="text-gray-600">Syncing your game data for PIN: {userPin}</div>
           <div className="mt-4">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
           </div>
@@ -642,7 +647,11 @@ export default function GameStats() {
       <div className="text-center mb-4">
         <h1 className="text-2xl font-bold mb-2">Soccer Stat Tracker</h1>
         
-        {/* Sync Status Indicator */}
+        {/* PIN and Sync Status Indicator */}
+        <div className="flex items-center justify-center space-x-2 text-sm mb-2">
+          <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">PIN: {userPin}</span>
+        </div>
+        
         <div className="flex items-center justify-center space-x-2 text-sm">
           <div className={`w-2 h-2 rounded-full ${
             syncStatus === 'synced' ? 'bg-green-500' : 
@@ -932,7 +941,7 @@ export default function GameStats() {
               
               <CSVLink
                 data={generateEnhancedCSV()}
-                filename={`soccer_stats_${new Date().toISOString().split('T')[0]}.csv`}
+                filename={`soccer_stats_pin${userPin}_${new Date().toISOString().split('T')[0]}.csv`}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm"
               >
                 Export CSV
@@ -943,7 +952,7 @@ export default function GameStats() {
             <div className="flex justify-center gap-2 flex-wrap">
               <CSVLink
                 data={savedGames}
-                filename={`soccer_stats_raw_${new Date().toISOString().split('T')[0]}.csv`}
+                filename={`soccer_stats_raw_pin${userPin}_${new Date().toISOString().split('T')[0]}.csv`}
                 className="bg-gray-600 text-white px-3 py-2 rounded-lg text-xs"
               >
                 Raw Data
