@@ -1,0 +1,302 @@
+// src/firebase/database.js
+import { 
+  collection, 
+  doc, 
+  getDocs, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  orderBy, 
+  limit, 
+  where,
+  onSnapshot,
+  enableNetwork,
+  disableNetwork,
+  waitForPendingWrites
+} from 'firebase/firestore';
+import { db } from './config';
+
+// Collection name for game data
+const GAMES_COLLECTION = 'soccerGames';
+
+// Enhanced error handling
+class DatabaseError extends Error {
+  constructor(message, code = 'unknown', originalError = null) {
+    super(message);
+    this.name = 'DatabaseError';
+    this.code = code;
+    this.originalError = originalError;
+  }
+}
+
+// Retry mechanism for network operations
+const withRetry = async (operation, maxRetries = 3, delay = 1000) => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (attempt === maxRetries || error.code === 'permission-denied') {
+        throw error;
+      }
+      
+      // Exponential backoff
+      await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, attempt - 1)));
+    }
+  }
+};
+
+// Data validation and sanitization
+const validateGameData = (gameData) => {
+  const required = ['date', 'playerName'];
+  const missing = required.filter(field => !gameData[field]);
+  
+  if (missing.length > 0) {
+    throw new DatabaseError(`Missing required fields: ${missing.join(', ')}`);
+  }
+
+  // Sanitize and validate numeric fields
+  const sanitized = { ...gameData };
+  const numericFields = [
+    'goalsLeft', 'goalsRight', 'shotsLeft', 'shotsRight', 
+    'assists', 'passCompletions', 'cornersTaken', 'cornerConversions',
+    'fouls', 'cards', 'gkShotsSaved', 'gkGoalsAgainst', 'ourGoals', 'theirGoals'
+  ];
+
+  numericFields.forEach(field => {
+    if (sanitized[field] !== undefined) {
+      const value = Number(sanitized[field]);
+      if (isNaN(value) || value < 0) {
+        sanitized[field] = 0;
+      } else {
+        sanitized[field] = Math.floor(value); // Ensure integers
+      }
+    }
+  });
+
+  // Add metadata
+  sanitized.lastModified = new Date();
+  sanitized.version = '1.0';
+
+  return sanitized;
+};
+
+// Get device ID for offline-first approach (no user auth required)
+const getDeviceId = () => {
+  let deviceId = localStorage.getItem('soccerApp_deviceId');
+  if (!deviceId) {
+    deviceId = 'device_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+    localStorage.setItem('soccerApp_deviceId', deviceId);
+  }
+  return deviceId;
+};
+
+// Database operations
+export const gameService = {
+  // Save a new game
+  async saveGame(gameData) {
+    try {
+      const validated = validateGameData(gameData);
+      validated.deviceId = getDeviceId();
+      validated.createdAt = new Date();
+      
+      return await withRetry(async () => {
+        const docRef = await addDoc(collection(db, GAMES_COLLECTION), validated);
+        return {
+          id: docRef.id,
+          ...validated
+        };
+      });
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to save game: ${error.message}`,
+        error.code,
+        error
+      );
+    }
+  },
+
+  // Load all games for this device
+  async loadGames() {
+    try {
+      const deviceId = getDeviceId();
+      
+      return await withRetry(async () => {
+        const q = query(
+          collection(db, GAMES_COLLECTION),
+          where('deviceId', '==', deviceId),
+          orderBy('createdAt', 'desc'),
+          limit(1000) // Reasonable limit
+        );
+        
+        const querySnapshot = await getDocs(q);
+        const games = [];
+        
+        querySnapshot.forEach((doc) => {
+          games.push({
+            id: doc.id,
+            ...doc.data(),
+            // Convert Firestore timestamps back to strings for compatibility
+            createdAt: doc.data().createdAt?.toDate?.() || doc.data().createdAt,
+            lastModified: doc.data().lastModified?.toDate?.() || doc.data().lastModified
+          });
+        });
+        
+        return games;
+      });
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to load games: ${error.message}`,
+        error.code,
+        error
+      );
+    }
+  },
+
+  // Update an existing game
+  async updateGame(gameId, gameData) {
+    try {
+      const validated = validateGameData(gameData);
+      validated.lastModified = new Date();
+      
+      return await withRetry(async () => {
+        const gameRef = doc(db, GAMES_COLLECTION, gameId);
+        await updateDoc(gameRef, validated);
+        return {
+          id: gameId,
+          ...validated
+        };
+      });
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to update game: ${error.message}`,
+        error.code,
+        error
+      );
+    }
+  },
+
+  // Delete a game
+  async deleteGame(gameId) {
+    try {
+      return await withRetry(async () => {
+        const gameRef = doc(db, GAMES_COLLECTION, gameId);
+        await deleteDoc(gameRef);
+        return true;
+      });
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to delete game: ${error.message}`,
+        error.code,
+        error
+      );
+    }
+  },
+
+  // Bulk operations for import/export
+  async bulkSaveGames(games) {
+    const results = {
+      success: [],
+      failed: []
+    };
+
+    for (const game of games) {
+      try {
+        const result = await this.saveGame(game);
+        results.success.push(result);
+      } catch (error) {
+        results.failed.push({ game, error: error.message });
+      }
+    }
+
+    return results;
+  },
+
+  // Clear all games for this device
+  async clearAllGames() {
+    try {
+      const games = await this.loadGames();
+      const deletePromises = games.map(game => this.deleteGame(game.id));
+      await Promise.all(deletePromises);
+      return true;
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to clear all games: ${error.message}`,
+        error.code,
+        error
+      );
+    }
+  },
+
+  // Real-time listener for games (optional feature)
+  onGamesChange(callback) {
+    try {
+      const deviceId = getDeviceId();
+      const q = query(
+        collection(db, GAMES_COLLECTION),
+        where('deviceId', '==', deviceId),
+        orderBy('createdAt', 'desc')
+      );
+
+      return onSnapshot(q, 
+        (querySnapshot) => {
+          const games = [];
+          querySnapshot.forEach((doc) => {
+            games.push({
+              id: doc.id,
+              ...doc.data(),
+              createdAt: doc.data().createdAt?.toDate?.() || doc.data().createdAt,
+              lastModified: doc.data().lastModified?.toDate?.() || doc.data().lastModified
+            });
+          });
+          callback(games);
+        },
+        (error) => {
+          console.error('Real-time listener error:', error);
+          callback(null, new DatabaseError('Real-time sync failed', error.code, error));
+        }
+      );
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to set up real-time listener: ${error.message}`,
+        error.code,
+        error
+      );
+    }
+  },
+
+  // Network status management
+  async goOnline() {
+    try {
+      await enableNetwork(db);
+      return true;
+    } catch (error) {
+      console.warn('Failed to go online:', error);
+      return false;
+    }
+  },
+
+  async goOffline() {
+    try {
+      await disableNetwork(db);
+      return true;
+    } catch (error) {
+      console.warn('Failed to go offline:', error);
+      return false;
+    }
+  },
+
+  // Wait for pending writes (useful before app close)
+  async syncPendingWrites() {
+    try {
+      await waitForPendingWrites(db);
+      return true;
+    } catch (error) {
+      console.warn('Failed to sync pending writes:', error);
+      return false;
+    }
+  }
+};
+
+// Export database error class for error handling
+export { DatabaseError };

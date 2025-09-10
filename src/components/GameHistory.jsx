@@ -45,6 +45,19 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
     return 'No Score';
   };
 
+  // Helper functions for time conversion
+  const parseTimeToSeconds = (timeStr) => {
+    if (!timeStr) return 0;
+    const [minutes, seconds] = timeStr.split(':').map(Number);
+    return (minutes * 60) + (seconds || 0);
+  };
+
+  const formatSecondsToTime = (totalSeconds) => {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
+
   const startEditing = (gameIndex) => {
     const game = filteredGames[gameIndex];
     setEditingGame(gameIndex);
@@ -66,6 +79,15 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
       cards: game.cards || 0,
       gkShotsSaved: game.gkShotsSaved || 0,
       gkGoalsAgainst: game.gkGoalsAgainst || 0,
+      // NEW: Add player time editing (convert from display format to editable format)
+      playerMinutesPlayed: game.playerMinutesPlayed || '0:00',
+      // NEW: Add game notes editing
+      gameNotes: game.gameNotes || '',
+      // NEW: Add goal history for editing
+      goalHistory: {
+        our: game.goalHistory?.our ? [...game.goalHistory.our] : [],
+        their: game.goalHistory?.their ? [...game.goalHistory.their] : []
+      }
     });
   };
 
@@ -86,6 +108,82 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
         onDeleteGame(actualIndex);
       }
     }
+  };
+
+  // NEW: Goal editing functions
+  const addOurGoal = () => {
+    const newGoal = {
+      time: '0:00',
+      minute: 0,
+      timestamp: Date.now()
+    };
+    setEditFormData(prev => ({
+      ...prev,
+      goalHistory: {
+        ...prev.goalHistory,
+        our: [...prev.goalHistory.our, newGoal]
+      },
+      ourGoals: prev.goalHistory.our.length + 1
+    }));
+  };
+
+  const addTheirGoal = () => {
+    const newGoal = {
+      time: '0:00',
+      minute: 0,
+      timestamp: Date.now()
+    };
+    setEditFormData(prev => ({
+      ...prev,
+      goalHistory: {
+        ...prev.goalHistory,
+        their: [...prev.goalHistory.their, newGoal]
+      },
+      theirGoals: prev.goalHistory.their.length + 1
+    }));
+  };
+
+  const removeOurGoal = (index) => {
+    setEditFormData(prev => {
+      const newOurGoals = prev.goalHistory.our.filter((_, i) => i !== index);
+      return {
+        ...prev,
+        goalHistory: {
+          ...prev.goalHistory,
+          our: newOurGoals
+        },
+        ourGoals: newOurGoals.length
+      };
+    });
+  };
+
+  const removeTheirGoal = (index) => {
+    setEditFormData(prev => {
+      const newTheirGoals = prev.goalHistory.their.filter((_, i) => i !== index);
+      return {
+        ...prev,
+        goalHistory: {
+          ...prev.goalHistory,
+          their: newTheirGoals
+        },
+        theirGoals: newTheirGoals.length
+      };
+    });
+  };
+
+  const updateGoalTime = (team, goalIndex, newTime) => {
+    const minutes = parseTimeToSeconds(newTime) / 60;
+    setEditFormData(prev => ({
+      ...prev,
+      goalHistory: {
+        ...prev.goalHistory,
+        [team]: prev.goalHistory[team].map((goal, index) => 
+          index === goalIndex 
+            ? { ...goal, time: newTime, minute: Math.floor(minutes) }
+            : goal
+        )
+      }
+    }));
   };
 
   const saveEdit = () => {
@@ -120,10 +218,20 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
 
       const gameIndex = savedGames.findIndex(g => g === filteredGames[editingGame]);
       
+      // Convert player time to seconds for storage
+      const playerSeconds = parseTimeToSeconds(editFormData.playerMinutesPlayed);
+      
       // Recalculate derived values
       const updatedGame = {
         ...filteredGames[editingGame],
         ...editFormData,
+        // Update goal counts based on actual goal history length
+        ourGoals: editFormData.goalHistory.our.length,
+        theirGoals: editFormData.goalHistory.their.length,
+        // Store both formats for player time
+        playerMinutesPlayed: editFormData.playerMinutesPlayed,
+        playerSecondsPlayed: playerSeconds,
+        // Calculated stats
         totalGoals: (editFormData.goalsLeft || 0) + (editFormData.goalsRight || 0),
         totalShots: (editFormData.shotsLeft || 0) + (editFormData.shotsRight || 0),
         goalConversionRate: ((editFormData.shotsLeft || 0) + (editFormData.shotsRight || 0)) > 0 ? 
@@ -131,8 +239,8 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
            ((editFormData.shotsLeft || 0) + (editFormData.shotsRight || 0)) * 100).toFixed(1) + '%' : '0%',
         cornerConversionRate: (editFormData.cornersTaken || 0) > 0 ? 
           (((editFormData.cornerConversions || 0) / (editFormData.cornersTaken || 0)) * 100).toFixed(1) + '%' : '0%',
-        gameResult: (editFormData.ourGoals || 0) > (editFormData.theirGoals || 0) ? 'Win' : 
-                   (editFormData.ourGoals || 0) < (editFormData.theirGoals || 0) ? 'Loss' : 'Tie'
+        gameResult: editFormData.goalHistory.our.length > editFormData.goalHistory.their.length ? 'Win' : 
+                   editFormData.goalHistory.our.length < editFormData.goalHistory.their.length ? 'Loss' : 'Tie'
       };
       
       onUpdateGame(gameIndex, updatedGame);
@@ -144,7 +252,9 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
   const handleInputChange = (field, value) => {
     setEditFormData(prev => ({
       ...prev,
-      [field]: field === 'date' || field === 'playerName' || field === 'opponent' ? value : Number(value)
+      [field]: field === 'date' || field === 'playerName' || field === 'opponent' || field === 'playerMinutesPlayed' || field === 'gameNotes' 
+        ? value 
+        : Number(value)
     }));
   };
 
@@ -234,6 +344,93 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
                           onChange={(e) => handleInputChange('opponent', e.target.value)}
                           className="w-full p-2 border rounded"
                         />
+                      </div>
+                    </div>
+
+                    {/* NEW: Player Time */}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Player Time Played (MM:SS)</label>
+                      <input
+                        type="text"
+                        value={editFormData.playerMinutesPlayed}
+                        onChange={(e) => handleInputChange('playerMinutesPlayed', e.target.value)}
+                        placeholder="25:30"
+                        pattern="[0-9]{1,2}:[0-9]{2}"
+                        className="w-full p-2 border rounded"
+                      />
+                      <div className="text-xs text-gray-500 mt-1">Format: MM:SS (e.g., 25:30 for 25 minutes 30 seconds)</div>
+                    </div>
+
+                    {/* NEW: Goal Timeline Editing */}
+                    <div>
+                      <h5 className="font-medium mb-2">Goal Timeline</h5>
+                      
+                      {/* Our Goals */}
+                      <div className="mb-3">
+                        <div className="flex justify-between items-center mb-2">
+                          <label className="text-sm font-medium">Our Goals ({editFormData.goalHistory.our.length})</label>
+                          <button
+                            type="button"
+                            onClick={addOurGoal}
+                            className="bg-green-500 text-white px-2 py-1 rounded text-xs"
+                          >
+                            Add Goal
+                          </button>
+                        </div>
+                        {editFormData.goalHistory.our.map((goal, goalIndex) => (
+                          <div key={goalIndex} className="flex gap-2 mb-2 items-center">
+                            <input
+                              type="text"
+                              value={goal.time}
+                              onChange={(e) => updateGoalTime('our', goalIndex, e.target.value)}
+                              placeholder="25:30"
+                              pattern="[0-9]{1,2}:[0-9]{2}"
+                              className="flex-1 p-1 border rounded text-sm"
+                            />
+                            <span className="text-xs text-gray-500">min {goal.minute}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeOurGoal(goalIndex)}
+                              className="bg-red-500 text-white px-2 py-1 rounded text-xs"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Their Goals */}
+                      <div className="mb-3">
+                        <div className="flex justify-between items-center mb-2">
+                          <label className="text-sm font-medium">Their Goals ({editFormData.goalHistory.their.length})</label>
+                          <button
+                            type="button"
+                            onClick={addTheirGoal}
+                            className="bg-red-500 text-white px-2 py-1 rounded text-xs"
+                          >
+                            Add Goal
+                          </button>
+                        </div>
+                        {editFormData.goalHistory.their.map((goal, goalIndex) => (
+                          <div key={goalIndex} className="flex gap-2 mb-2 items-center">
+                            <input
+                              type="text"
+                              value={goal.time}
+                              onChange={(e) => updateGoalTime('their', goalIndex, e.target.value)}
+                              placeholder="25:30"
+                              pattern="[0-9]{1,2}:[0-9]{2}"
+                              className="flex-1 p-1 border rounded text-sm"
+                            />
+                            <span className="text-xs text-gray-500">min {goal.minute}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeTheirGoal(goalIndex)}
+                              className="bg-red-500 text-white px-2 py-1 rounded text-xs"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
@@ -397,6 +594,22 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
                       </div>
                     </div>
 
+                    {/* NEW: Game Notes */}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Game Notes/Comments</label>
+                      <textarea
+                        value={editFormData.gameNotes}
+                        onChange={(e) => handleInputChange('gameNotes', e.target.value)}
+                        placeholder="Add notes about the game, memorable plays, conditions, etc."
+                        className="w-full p-2 border rounded resize-none"
+                        rows="3"
+                        maxLength={500}
+                      />
+                      <div className="text-xs text-gray-500 mt-1">
+                        {(editFormData.gameNotes || '').length}/500 characters
+                      </div>
+                    </div>
+
                     {/* Save/Cancel Buttons */}
                     <div className="flex gap-2 mt-4">
                       <button
@@ -464,6 +677,16 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
                                 {goal.time} - {goal.type === 'us' ? 'Us' : 'Them'} (min {goal.minute})
                               </div>
                             ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* NEW: Display Game Notes */}
+                    {game.gameNotes && (
+                      <div className="mt-4">
+                        <h4 className="font-semibold mb-2">Game Notes</h4>
+                        <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded">
+                          {game.gameNotes}
                         </div>
                       </div>
                     )}
