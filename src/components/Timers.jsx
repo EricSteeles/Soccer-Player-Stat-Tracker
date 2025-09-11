@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 export default function Timers({ halftimeMinutes, setHalftimeMinutes, onTimeChange }) {
   const [seconds, setSeconds] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
+  const [currentHalf, setCurrentHalf] = useState(1); // Track which half we're in
   
   // Real-time (background-safe) timing
   const startTimeRef = useRef(null);
@@ -15,6 +16,11 @@ export default function Timers({ halftimeMinutes, setHalftimeMinutes, onTimeChan
   const totalHalftimeSeconds = halftimeMinutes * 60;
   const remainingSeconds = Math.max(0, totalHalftimeSeconds - seconds);
   const isTimeUp = remainingSeconds === 0;
+
+  // Calculate total cumulative game time across both halves
+  const totalGameSeconds = currentHalf === 1 ? 
+    seconds : // First half: just elapsed seconds
+    (totalHalftimeSeconds + seconds); // Second half: first half + current elapsed
 
   // Audio context management
   const audioContextRef = useRef(null);
@@ -75,7 +81,6 @@ export default function Timers({ halftimeMinutes, setHalftimeMinutes, onTimeChan
     if (!context) return;
 
     try {
-      // Request permission on first use (important for mobile)
       if (!audioPermissionGranted) {
         const granted = await requestAudioPermission();
         if (!granted) return;
@@ -127,7 +132,6 @@ export default function Timers({ halftimeMinutes, setHalftimeMinutes, onTimeChan
         oscillator.stop(startTime + duration);
       };
       
-      // Play a celebratory chord sequence
       const now = context.currentTime;
       playTone(523, now, 0.5); // C
       playTone(659, now + 0.1, 0.5); // E
@@ -142,11 +146,10 @@ export default function Timers({ halftimeMinutes, setHalftimeMinutes, onTimeChan
     if (!audioSupported || !audioPermissionGranted) return;
     
     try {
-      // Use Web Speech API for voice countdown
       if ('speechSynthesis' in window) {
         const utterance = new SpeechSynthesisUtterance(message.toString());
-        utterance.rate = 1.2; // Slightly faster
-        utterance.pitch = 1.1; // Slightly higher pitch
+        utterance.rate = 1.2;
+        utterance.pitch = 1.1;
         utterance.volume = 0.8;
         window.speechSynthesis.speak(utterance);
       }
@@ -158,19 +161,21 @@ export default function Timers({ halftimeMinutes, setHalftimeMinutes, onTimeChan
   // Audio countdown effect with voice
   useEffect(() => {
     if (isRunning && remainingSeconds <= 10 && remainingSeconds > 0) {
-      // Play both ding and voice for last 10 seconds, but only once per second
       if (lastSecondPlayedRef.current !== remainingSeconds) {
         playDing();
         playVoiceCountdown(remainingSeconds);
         lastSecondPlayedRef.current = remainingSeconds;
       }
     } else if (isTimeUp && isRunning && lastSecondPlayedRef.current !== 0) {
-      // Play completion sound and announce "Halftime Over!" when time reaches zero
       playCompletionSound();
-      playVoiceCountdown("Halftime Over");
+      if (currentHalf === 1) {
+        playVoiceCountdown("First Half Over");
+      } else {
+        playVoiceCountdown("Full Time");
+      }
       lastSecondPlayedRef.current = 0;
     }
-  }, [remainingSeconds, isRunning, isTimeUp]);
+  }, [remainingSeconds, isRunning, isTimeUp, currentHalf]);
 
   const startTimer = () => {
     if (!isRunning && !isTimeUp) {
@@ -185,16 +190,28 @@ export default function Timers({ halftimeMinutes, setHalftimeMinutes, onTimeChan
       const newTotal = accumulatedRef.current + additionalTime;
       accumulatedRef.current = newTotal;
       setSeconds(newTotal);
-      setIsRunning(false); // Set this after updating seconds to prevent race conditions
+      setIsRunning(false);
     }
   };
 
-  const resetTimer = () => {
-    setIsRunning(false);
+  // Start second half
+  const startSecondHalf = () => {
+    setCurrentHalf(2);
     setSeconds(0);
     accumulatedRef.current = 0;
     startTimeRef.current = null;
-    lastSecondPlayedRef.current = null; // Reset audio tracking
+    lastSecondPlayedRef.current = null;
+    setIsRunning(false);
+  };
+
+  // Reset entire game
+  const resetTimer = () => {
+    setIsRunning(false);
+    setSeconds(0);
+    setCurrentHalf(1);
+    accumulatedRef.current = 0;
+    startTimeRef.current = null;
+    lastSecondPlayedRef.current = null;
   };
 
   // Auto-pause when time is up
@@ -206,44 +223,39 @@ export default function Timers({ halftimeMinutes, setHalftimeMinutes, onTimeChan
 
   // Reset timer when halftime minutes changes with validation
   useEffect(() => {
-    // Validate halftime minutes
     if (halftimeMinutes < 1 || halftimeMinutes > 90) {
       console.warn('Invalid halftime minutes:', halftimeMinutes);
-      setHalftimeMinutes(30); // Reset to default
+      setHalftimeMinutes(30);
       return;
     }
     resetTimer();
   }, [halftimeMinutes, setHalftimeMinutes]);
 
-  // Update parent whenever seconds changes
+  // Update parent with TOTAL game seconds (cumulative across both halves)
   useEffect(() => {
     if (onTimeChange) {
-      onTimeChange(seconds);
+      onTimeChange(totalGameSeconds);
     }
-  }, [seconds, onTimeChange]);
+  }, [totalGameSeconds, onTimeChange]);
 
   useEffect(() => {
     let interval = null;
     if (isRunning && !isTimeUp) {
-      // Use a shorter interval for better precision, then sync with real time
       interval = setInterval(() => {
         const now = Date.now();
         const elapsed = Math.floor((now - startTimeRef.current) / 1000);
         const newTotal = accumulatedRef.current + elapsed;
         
-        // Don't exceed the halftime duration
         const cappedTotal = Math.min(newTotal, totalHalftimeSeconds);
         
-        // Only update if value actually changed to reduce re-renders
         if (cappedTotal !== seconds) {
           setSeconds(cappedTotal);
         }
         
-        // Stop when time is up
         if (cappedTotal >= totalHalftimeSeconds) {
           setIsRunning(false);
         }
-      }, 100); // More frequent checks for precision, but only update when needed
+      }, 100);
     }
     return () => clearInterval(interval);
   }, [isRunning, isTimeUp, totalHalftimeSeconds, seconds]);
@@ -254,17 +266,17 @@ export default function Timers({ halftimeMinutes, setHalftimeMinutes, onTimeChan
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
+  const isGameComplete = currentHalf === 2 && isTimeUp;
+
   return (
     <div className={`bg-gray-100 p-4 rounded-lg shadow-md w-full ${isTimeUp ? 'bg-red-100 border-2 border-red-400' : ''}`}>
-      {/* Fixed height sections for perfect alignment */}
-      
-      {/* Top section - 40px height */}
+      {/* Top section - Halftime minutes selector */}
       <div className="h-10 mb-3 flex justify-center">
         <select
           value={halftimeMinutes}
           onChange={(e) => setHalftimeMinutes(Number(e.target.value))}
           className="border rounded px-2 py-1 h-8"
-          disabled={isRunning}
+          disabled={isRunning || currentHalf === 2}
         >
           {[30, 35, 40, 45].map((min) => (
             <option key={min} value={min}>
@@ -274,33 +286,88 @@ export default function Timers({ halftimeMinutes, setHalftimeMinutes, onTimeChan
         </select>
       </div>
       
-      {/* Middle section - 70px height */}
+      {/* Middle section - Time display */}
       <div className="h-[70px] mb-3 flex flex-col justify-center items-center">
         <div className={`text-2xl font-bold ${isTimeUp ? 'text-red-600' : ''}`}>
           {formatTime(remainingSeconds)}
         </div>
         <div className="text-sm text-gray-600 h-5 flex items-center">
-          {isTimeUp ? 'TIME UP!' : `${formatTime(seconds)} elapsed`}
+          {isTimeUp ? 
+            (currentHalf === 1 ? 'HALFTIME!' : 'FULL TIME!') : 
+            `${formatTime(seconds)} elapsed`
+          }
+        </div>
+        <div className="text-xs text-blue-600 font-semibold">
+          {currentHalf === 1 ? 'First Half' : 'Second Half'} • Total: {formatTime(totalGameSeconds)}
         </div>
       </div>
       
-      {/* Bottom section - start/stop toggle + reset */}
+      {/* Bottom section - Controls */}
       <div className="flex gap-2 justify-center px-2">
-        <button
-          onClick={isRunning ? pauseTimer : startTimer}
-          className={`px-4 py-2 rounded text-white disabled:bg-gray-400 text-sm flex-1 ${
-            isRunning ? 'bg-red-500' : 'bg-green-500'
-          }`}
-          disabled={isTimeUp && !isRunning}
-        >
-          {isRunning ? 'Stop' : 'Start'}
-        </button>
-        <button
-          onClick={resetTimer}
-          className="px-4 py-2 rounded bg-gray-600 text-white text-sm flex-1"
-        >
-          Reset
-        </button>
+        {/* Show different buttons based on game state */}
+        {currentHalf === 1 && !isTimeUp && (
+          <>
+            <button
+              onClick={isRunning ? pauseTimer : startTimer}
+              className={`px-4 py-2 rounded text-white text-sm flex-1 ${
+                isRunning ? 'bg-red-500' : 'bg-green-500'
+              }`}
+            >
+              {isRunning ? 'Stop' : 'Start'}
+            </button>
+            <button
+              onClick={resetTimer}
+              className="px-4 py-2 rounded bg-gray-600 text-white text-sm flex-1"
+            >
+              Reset
+            </button>
+          </>
+        )}
+        
+        {currentHalf === 1 && isTimeUp && (
+          <>
+            <button
+              onClick={startSecondHalf}
+              className="px-4 py-2 rounded bg-blue-600 text-white text-sm flex-1"
+            >
+              Start 2nd Half
+            </button>
+            <button
+              onClick={resetTimer}
+              className="px-4 py-2 rounded bg-gray-600 text-white text-sm flex-1"
+            >
+              Reset Game
+            </button>
+          </>
+        )}
+        
+        {currentHalf === 2 && !isTimeUp && (
+          <>
+            <button
+              onClick={isRunning ? pauseTimer : startTimer}
+              className={`px-4 py-2 rounded text-white text-sm flex-1 ${
+                isRunning ? 'bg-red-500' : 'bg-green-500'
+              }`}
+            >
+              {isRunning ? 'Stop' : 'Start'}
+            </button>
+            <button
+              onClick={resetTimer}
+              className="px-4 py-2 rounded bg-gray-600 text-white text-sm flex-1"
+            >
+              Reset Game
+            </button>
+          </>
+        )}
+        
+        {isGameComplete && (
+          <button
+            onClick={resetTimer}
+            className="px-4 py-2 rounded bg-gray-600 text-white text-sm w-full"
+          >
+            New Game
+          </button>
+        )}
       </div>
     </div>
   );
