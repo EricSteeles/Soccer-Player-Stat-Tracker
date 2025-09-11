@@ -76,12 +76,28 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
       passCompletions: game.passCompletions || 0,
       cornersTaken: game.cornersTaken || 0,
       cornerConversions: game.cornerConversions || 0,
+      // NEW: 1v1 stats
+      offensive1v1Attempts: game.offensive1v1Attempts || 0,
+      offensive1v1Won: game.offensive1v1Won || 0,
+      defensive1v1Attempts: game.defensive1v1Attempts || 0,
+      defensive1v1Won: game.defensive1v1Won || 0,
+      // Existing stats
       fouls: game.fouls || 0,
       cards: game.cards || 0,
       gkShotsSaved: game.gkShotsSaved || 0,
       gkGoalsAgainst: game.gkGoalsAgainst || 0,
+      // NEW: Free kick stats
+      freeKicksTaken: game.freeKicksTaken || 0,
+      freeKicksMade: game.freeKicksMade || 0,
+      // NEW: Defensive stats
+      defensiveTackles: game.defensiveTackles || 0,
+      defensiveFailures: game.defensiveFailures || 0,
+      defensiveDisruption: game.defensiveDisruption || 0,
+      defensiveDistribution: game.defensiveDistribution || 0,
+      // Time and notes
       playerMinutesPlayed: game.playerMinutesPlayed || '0:00',
       gameNotes: game.gameNotes || '',
+      // Goal history
       goalHistory: {
         our: game.goalHistory?.our ? [...game.goalHistory.our] : [],
         their: game.goalHistory?.their ? [...game.goalHistory.their] : []
@@ -196,6 +212,21 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
         if ((stats.cornerConversions || 0) > (stats.cornersTaken || 0)) {
           warnings.push('Corner conversions exceed corners taken');
         }
+        if ((stats.offensive1v1Won || 0) > (stats.offensive1v1Attempts || 0)) {
+          warnings.push('Offensive 1v1 won exceed attempts');
+        }
+        if ((stats.defensive1v1Won || 0) > (stats.defensive1v1Attempts || 0)) {
+          warnings.push('Defensive 1v1 won exceed attempts');
+        }
+        if ((stats.freeKicksMade || 0) > (stats.freeKicksTaken || 0)) {
+          warnings.push('Free kicks made exceed attempts');
+        }
+        if ((stats.defensiveFailures || 0) > (stats.defensiveTackles || 0)) {
+          warnings.push('Defensive failures exceed tackles');
+        }
+        if ((stats.defensiveDistribution || 0) > (stats.defensiveDisruption || 0)) {
+          warnings.push('Defensive distribution exceed disruption');
+        }
         
         return warnings;
       };
@@ -225,6 +256,17 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
            ((editFormData.shotsLeft || 0) + (editFormData.shotsRight || 0)) * 100).toFixed(1) + '%' : '0%',
         cornerConversionRate: (editFormData.cornersTaken || 0) > 0 ? 
           (((editFormData.cornerConversions || 0) / (editFormData.cornersTaken || 0)) * 100).toFixed(1) + '%' : '0%',
+        // NEW: Calculate percentage rates
+        offensive1v1Rate: (editFormData.offensive1v1Attempts || 0) > 0 ? 
+          (((editFormData.offensive1v1Won || 0) / (editFormData.offensive1v1Attempts || 0)) * 100).toFixed(1) + '%' : '0%',
+        defensive1v1Rate: (editFormData.defensive1v1Attempts || 0) > 0 ? 
+          (((editFormData.defensive1v1Won || 0) / (editFormData.defensive1v1Attempts || 0)) * 100).toFixed(1) + '%' : '0%',
+        freeKickConversionRate: (editFormData.freeKicksTaken || 0) > 0 ? 
+          (((editFormData.freeKicksMade || 0) / (editFormData.freeKicksTaken || 0)) * 100).toFixed(1) + '%' : '0%',
+        defensiveTackleRate: (editFormData.defensiveTackles || 0) > 0 ? 
+          ((((editFormData.defensiveTackles || 0) - (editFormData.defensiveFailures || 0)) / (editFormData.defensiveTackles || 0)) * 100).toFixed(1) + '%' : '0%',
+        defensiveDistributionRate: (editFormData.defensiveDisruption || 0) > 0 ? 
+          (((editFormData.defensiveDistribution || 0) / (editFormData.defensiveDisruption || 0)) * 100).toFixed(1) + '%' : '0%',
         gameResult: editFormData.goalHistory.our.length > editFormData.goalHistory.their.length ? 'Win' : 
                    editFormData.goalHistory.our.length < editFormData.goalHistory.their.length ? 'Loss' : 'Tie'
       };
@@ -303,8 +345,8 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
             {expandedGame === index && (
               <div className="p-6 bg-white border-t">
                 {editingGame === index ? (
-                  // Edit Mode (keeping existing edit functionality)
-                  <div className="space-y-3">
+                  // Edit Mode (comprehensive form with all new fields)
+                  <div className="space-y-4">
                     <h4 className="font-semibold mb-3">Edit Game</h4>
                     
                     {/* Basic Info */}
@@ -452,135 +494,269 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
                       </div>
                     </div>
 
-                    {/* Personal Stats */}
+                    {/* Personal Stats - Organized into sections */}
                     <div>
-                      <h5 className="font-medium mb-2">Personal Stats</h5>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Goals Left</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={editFormData.goalsLeft}
-                            onChange={(e) => handleInputChange('goalsLeft', e.target.value)}
-                            className="w-full p-2 border rounded"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Goals Right</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={editFormData.goalsRight}
-                            onChange={(e) => handleInputChange('goalsRight', e.target.value)}
-                            className="w-full p-2 border rounded"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Shots Left</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={editFormData.shotsLeft}
-                            onChange={(e) => handleInputChange('shotsLeft', e.target.value)}
-                            className="w-full p-2 border rounded"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Shots Right</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={editFormData.shotsRight}
-                            onChange={(e) => handleInputChange('shotsRight', e.target.value)}
-                            className="w-full p-2 border rounded"
-                          />
-                        </div>
-                      </div>
+                      <h5 className="font-medium mb-3">Personal Stats</h5>
                       
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Assists</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={editFormData.assists}
-                            onChange={(e) => handleInputChange('assists', e.target.value)}
-                            className="w-full p-2 border rounded"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Pass Completions</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={editFormData.passCompletions}
-                            onChange={(e) => handleInputChange('passCompletions', e.target.value)}
-                            className="w-full p-2 border rounded"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Corners Taken</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={editFormData.cornersTaken}
-                            onChange={(e) => handleInputChange('cornersTaken', e.target.value)}
-                            className="w-full p-2 border rounded"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Corner Conversions</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={editFormData.cornerConversions}
-                            onChange={(e) => handleInputChange('cornerConversions', e.target.value)}
-                            className="w-full p-2 border rounded"
-                          />
+                      {/* Scoring */}
+                      <div className="mb-4">
+                        <h6 className="text-sm font-medium text-orange-700 mb-2">Scoring</h6>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Goals Left</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.goalsLeft}
+                              onChange={(e) => handleInputChange('goalsLeft', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Goals Right</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.goalsRight}
+                              onChange={(e) => handleInputChange('goalsRight', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Shots Left</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.shotsLeft}
+                              onChange={(e) => handleInputChange('shotsLeft', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Shots Right</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.shotsRight}
+                              onChange={(e) => handleInputChange('shotsRight', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Fouls</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={editFormData.fouls}
-                            onChange={(e) => handleInputChange('fouls', e.target.value)}
-                            className="w-full p-2 border rounded"
-                          />
+                      {/* Playmaking */}
+                      <div className="mb-4">
+                        <h6 className="text-sm font-medium text-purple-700 mb-2">Playmaking</h6>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Assists</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.assists}
+                              onChange={(e) => handleInputChange('assists', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Pass Completions</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.passCompletions}
+                              onChange={(e) => handleInputChange('passCompletions', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Corners Taken</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.cornersTaken}
+                              onChange={(e) => handleInputChange('cornersTaken', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Corner Conversions</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.cornerConversions}
+                              onChange={(e) => handleInputChange('cornerConversions', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Cards</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={editFormData.cards}
-                            onChange={(e) => handleInputChange('cards', e.target.value)}
-                            className="w-full p-2 border rounded"
-                          />
+                      </div>
+
+                      {/* 1v1 Stats */}
+                      <div className="mb-4">
+                        <h6 className="text-sm font-medium text-blue-700 mb-2">1v1 Situations</h6>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Offensive 1v1 Attempts</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.offensive1v1Attempts}
+                              onChange={(e) => handleInputChange('offensive1v1Attempts', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Offensive 1v1 Won</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.offensive1v1Won}
+                              onChange={(e) => handleInputChange('offensive1v1Won', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Defensive 1v1 Attempts</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.defensive1v1Attempts}
+                              onChange={(e) => handleInputChange('defensive1v1Attempts', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Defensive 1v1 Won</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.defensive1v1Won}
+                              onChange={(e) => handleInputChange('defensive1v1Won', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">GK Saves</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={editFormData.gkShotsSaved}
-                            onChange={(e) => handleInputChange('gkShotsSaved', e.target.value)}
-                            className="w-full p-2 border rounded"
-                          />
+                      </div>
+
+                      {/* Set Pieces & Defensive Actions */}
+                      <div className="mb-4">
+                        <h6 className="text-sm font-medium text-green-700 mb-2">Set Pieces & Defense</h6>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Free Kicks Taken</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.freeKicksTaken}
+                              onChange={(e) => handleInputChange('freeKicksTaken', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Free Kicks Made</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.freeKicksMade}
+                              onChange={(e) => handleInputChange('freeKicksMade', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Defensive Tackles</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.defensiveTackles}
+                              onChange={(e) => handleInputChange('defensiveTackles', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Defensive Failures</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.defensiveFailures}
+                              onChange={(e) => handleInputChange('defensiveFailures', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">GK Goals Against</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={editFormData.gkGoalsAgainst}
-                            onChange={(e) => handleInputChange('gkGoalsAgainst', e.target.value)}
-                            className="w-full p-2 border rounded"
-                          />
+                      </div>
+
+                      {/* Defensive Disruption */}
+                      <div className="mb-4">
+                        <h6 className="text-sm font-medium text-indigo-700 mb-2">Defensive Disruption</h6>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Defensive Disruption</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.defensiveDisruption}
+                              onChange={(e) => handleInputChange('defensiveDisruption', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Defensive Distribution</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.defensiveDistribution}
+                              onChange={(e) => handleInputChange('defensiveDistribution', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Discipline & Goalkeeping */}
+                      <div className="mb-4">
+                        <h6 className="text-sm font-medium text-yellow-700 mb-2">Discipline & Goalkeeping</h6>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Fouls</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.fouls}
+                              onChange={(e) => handleInputChange('fouls', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Cards</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.cards}
+                              onChange={(e) => handleInputChange('cards', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">GK Saves</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.gkShotsSaved}
+                              onChange={(e) => handleInputChange('gkShotsSaved', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">GK Goals Against</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.gkGoalsAgainst}
+                              onChange={(e) => handleInputChange('gkGoalsAgainst', e.target.value)}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -618,7 +794,7 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
                     </div>
                   </div>
                 ) : (
-                  // IMPROVED VIEW MODE
+                  // IMPROVED VIEW MODE with all new stats
                   <div className="space-y-6">
                     {/* Game Summary Card - Hero Section */}
                     <div className={`p-4 rounded-lg border-2 ${getResultColor(getGameResult(game))}`}>
@@ -651,7 +827,7 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
                       </button>
                     </div>
 
-                    {/* Goal Timeline - Prominent Display */}
+                    {/* Goal Timeline */}
                     {game.goalHistory && (game.goalHistory.our.length > 0 || game.goalHistory.their.length > 0) && (
                       <div className="bg-blue-50 p-4 rounded-lg">
                         <h4 className="font-semibold mb-3 text-center text-blue-900">Goal Timeline</h4>
@@ -675,7 +851,7 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
                       </div>
                     )}
 
-                    {/* Conditional Stats Sections - Only show if stats exist */}
+                    {/* Conditional Stats Sections - Updated with new categories */}
                     <div className="grid gap-4">
                       
                       {/* Scoring Stats */}
@@ -740,6 +916,84 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
                                     </div>
                                   )}
                                 </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 1v1 Situations */}
+                      {hasStats(game, ['offensive1v1Attempts', 'offensive1v1Won', 'defensive1v1Attempts', 'defensive1v1Won']) && (
+                        <div className="bg-blue-50 p-4 rounded-lg">
+                          <h4 className="font-semibold mb-3 text-blue-900">1v1 Situations</h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {(game.offensive1v1Attempts || 0) > 0 && (
+                              <div className="text-center">
+                                <div className="text-xl font-bold text-blue-600">{game.offensive1v1Won}/{game.offensive1v1Attempts}</div>
+                                <div className="text-sm text-gray-600">Offensive 1v1</div>
+                                {game.offensive1v1Rate && game.offensive1v1Rate !== '0%' && (
+                                  <div className="text-xs text-blue-700 font-medium">{game.offensive1v1Rate} success</div>
+                                )}
+                              </div>
+                            )}
+                            {(game.defensive1v1Attempts || 0) > 0 && (
+                              <div className="text-center">
+                                <div className="text-xl font-bold text-blue-600">{game.defensive1v1Won}/{game.defensive1v1Attempts}</div>
+                                <div className="text-sm text-gray-600">Defensive 1v1</div>
+                                {game.defensive1v1Rate && game.defensive1v1Rate !== '0%' && (
+                                  <div className="text-xs text-blue-700 font-medium">{game.defensive1v1Rate} success</div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Set Pieces & Defensive Actions */}
+                      {hasStats(game, ['freeKicksTaken', 'freeKicksMade', 'defensiveTackles', 'defensiveFailures']) && (
+                        <div className="bg-green-50 p-4 rounded-lg">
+                          <h4 className="font-semibold mb-3 text-green-900">Set Pieces & Defense</h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {(game.freeKicksTaken || 0) > 0 && (
+                              <div className="text-center">
+                                <div className="text-xl font-bold text-green-600">{game.freeKicksMade}/{game.freeKicksTaken}</div>
+                                <div className="text-sm text-gray-600">Free Kicks</div>
+                                {game.freeKickConversionRate && game.freeKickConversionRate !== '0%' && (
+                                  <div className="text-xs text-green-700 font-medium">{game.freeKickConversionRate} conversion</div>
+                                )}
+                              </div>
+                            )}
+                            {(game.defensiveTackles || 0) > 0 && (
+                              <div className="text-center">
+                                <div className="text-xl font-bold text-green-600">{game.defensiveTackles - (game.defensiveFailures || 0)}/{game.defensiveTackles}</div>
+                                <div className="text-sm text-gray-600">Defensive Tackles</div>
+                                {game.defensiveTackleRate && game.defensiveTackleRate !== '0%' && (
+                                  <div className="text-xs text-green-700 font-medium">{game.defensiveTackleRate} success</div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Defensive Disruption */}
+                      {hasStats(game, ['defensiveDisruption', 'defensiveDistribution']) && (
+                        <div className="bg-indigo-50 p-4 rounded-lg">
+                          <h4 className="font-semibold mb-3 text-indigo-900">Defensive Disruption</h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-center">
+                            {(game.defensiveDisruption || 0) > 0 && (
+                              <div>
+                                <div className="text-xl font-bold text-indigo-600">{game.defensiveDisruption}</div>
+                                <div className="text-sm text-gray-600">Disruptions</div>
+                              </div>
+                            )}
+                            {(game.defensiveDistribution || 0) > 0 && (
+                              <div>
+                                <div className="text-xl font-bold text-indigo-600">{game.defensiveDistribution}</div>
+                                <div className="text-sm text-gray-600">Distributions</div>
+                                {game.defensiveDistributionRate && game.defensiveDistributionRate !== '0%' && (
+                                  <div className="text-xs text-indigo-700 font-medium">{game.defensiveDistributionRate} rate</div>
+                                )}
                               </div>
                             )}
                           </div>
