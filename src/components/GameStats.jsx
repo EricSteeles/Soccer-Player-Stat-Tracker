@@ -5,7 +5,7 @@ import GameHistory from "./GameHistory"; // Game History Component
 import { CSVLink } from "react-csv";
 import { gameService, DatabaseError } from "../firebase/database";
 
-export default function GameStats({ userPin }) {
+export default function GameStats({ userPin, onSwitchPlayer }) {
   // Game info
   const [date, setDate] = useState(() => {
     try {
@@ -94,11 +94,11 @@ export default function GameStats({ userPin }) {
   const [cornersTaken, setCornersTaken] = useState(0);
   const [cornerConversions, setCornerConversions] = useState(0);
   
-  // NEW: Offensive 1v1 stats
+  // Offensive 1v1 stats
   const [offensive1v1Attempts, setOffensive1v1Attempts] = useState(0);
   const [offensive1v1Won, setOffensive1v1Won] = useState(0);
   
-  // NEW: Defensive 1v1 stats
+  // Defensive 1v1 stats
   const [defensive1v1Attempts, setDefensive1v1Attempts] = useState(0);
   const [defensive1v1Won, setDefensive1v1Won] = useState(0);
   
@@ -117,7 +117,7 @@ export default function GameStats({ userPin }) {
   const [freeKicksTaken, setFreeKicksTaken] = useState(0);
   const [freeKicksMade, setFreeKicksMade] = useState(0);
   
-  // NEW: Defensive stats
+  // Defensive stats
   const [defensiveTackles, setDefensiveTackles] = useState(0);
   const [defensiveFailures, setDefensiveFailures] = useState(0);
   const [defensiveDisruption, setDefensiveDisruption] = useState(0);
@@ -329,13 +329,13 @@ export default function GameStats({ userPin }) {
         // Stats
         goalsLeft, goalsRight, shotsLeft, shotsRight, assists, passCompletions,
         cornersTaken, cornerConversions, 
-        // NEW: 1v1 stats
+        // 1v1 stats
         offensive1v1Attempts, offensive1v1Won,
         defensive1v1Attempts, defensive1v1Won,
         // Existing stats
         fouls, cards, gkShotsSaved, gkGoalsAgainst,
         freeKicksTaken, freeKicksMade,
-        // NEW: Defensive stats
+        // Defensive stats
         defensiveTackles, defensiveFailures, defensiveDisruption, defensiveDistribution,
         // Game notes
         gameNotes: sanitizeInput(gameNotes),
@@ -344,7 +344,7 @@ export default function GameStats({ userPin }) {
         totalShots: shotsLeft + shotsRight,
         goalConversionRate: (shotsLeft + shotsRight) > 0 ? ((goalsLeft + goalsRight) / (shotsLeft + shotsRight) * 100).toFixed(1) + '%' : '0%',
         cornerConversionRate: cornersTaken > 0 ? ((cornerConversions / cornersTaken) * 100).toFixed(1) + '%' : '0%',
-        // NEW: Calculated percentages
+        // Calculated percentages
         offensive1v1Rate: offensive1v1Attempts > 0 ? ((offensive1v1Won / offensive1v1Attempts) * 100).toFixed(1) + '%' : '0%',
         defensive1v1Rate: defensive1v1Attempts > 0 ? ((defensive1v1Won / defensive1v1Attempts) * 100).toFixed(1) + '%' : '0%',
         freeKickConversionRate: freeKicksTaken > 0 ? ((freeKicksMade / freeKicksTaken) * 100).toFixed(1) + '%' : '0%',
@@ -384,7 +384,7 @@ export default function GameStats({ userPin }) {
         alert('Failed to save game to cloud. Data saved locally and will sync later.');
       }
       
-      // Save locally as fallback
+      // Save locally as fallback with all stats...
       const halftimeRemaining = Math.max(0, (halftimeMinutes * 60) - halftimeSeconds);
       const ourGoalCount = ourGoals.length;
       const theirGoalCount = theirGoals.length;
@@ -645,6 +645,13 @@ export default function GameStats({ userPin }) {
     return [summaryRow, ...chunks];
   };
 
+  // Handle switch player request
+  const handleSwitchPlayer = () => {
+    if (window.confirm('Switch to a different player? Any unsaved data will be lost.')) {
+      onSwitchPlayer();
+    }
+  };
+
   // Loading state
   if (isLoading) {
     return (
@@ -662,9 +669,18 @@ export default function GameStats({ userPin }) {
 
   return (
     <div className="p-4 max-w-md mx-auto">
-      {/* Header with sync status */}
+      {/* UPDATED Header with Switch Player button */}
       <div className="text-center mb-4">
-        <h1 className="text-2xl font-bold mb-2">Soccer Stat Tracker</h1>
+        <div className="flex justify-between items-start mb-2">
+          <h1 className="text-2xl font-bold flex-1">Soccer Stat Tracker</h1>
+          <button
+            onClick={handleSwitchPlayer}
+            className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm ml-2"
+            title="Switch to a different player"
+          >
+            Switch Player
+          </button>
+        </div>
         
         <div className="flex items-center justify-center space-x-2 text-sm mb-2">
           <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">PIN: {userPin}</span>

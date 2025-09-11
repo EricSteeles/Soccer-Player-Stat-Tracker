@@ -60,7 +60,10 @@ const validateGameData = (gameData) => {
   const numericFields = [
     'goalsLeft', 'goalsRight', 'shotsLeft', 'shotsRight', 
     'assists', 'passCompletions', 'cornersTaken', 'cornerConversions',
-    'fouls', 'cards', 'gkShotsSaved', 'gkGoalsAgainst', 'ourGoals', 'theirGoals'
+    'offensive1v1Attempts', 'offensive1v1Won', 'defensive1v1Attempts', 'defensive1v1Won',
+    'fouls', 'cards', 'gkShotsSaved', 'gkGoalsAgainst', 'ourGoals', 'theirGoals',
+    'freeKicksTaken', 'freeKicksMade', 'defensiveTackles', 'defensiveFailures',
+    'defensiveDisruption', 'defensiveDistribution'
   ];
 
   numericFields.forEach(field => {
@@ -91,6 +94,11 @@ const setUserPin = (pin) => {
   localStorage.setItem('soccerApp_userPin', pin);
 };
 
+// Clear user PIN (for logout/switch player)
+const clearUserPin = () => {
+  localStorage.removeItem('soccerApp_userPin');
+};
+
 // Database operations
 export const gameService = {
   // Check if user has a PIN set
@@ -106,6 +114,11 @@ export const gameService = {
   // Get current PIN (for display purposes)
   getCurrentPin() {
     return getUserPin();
+  },
+
+  // Clear current PIN (logout/switch player)
+  clearPin() {
+    clearUserPin();
   },
 
   // Save a new game
