@@ -20,29 +20,30 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
 
   const getResultColor = (result) => {
     switch(result) {
-      case 'Win': return 'text-green-600';
-      case 'Loss': return 'text-red-600';
-      case 'Tie': return 'text-gray-600';
-      default: return 'text-gray-600';
+      case 'Win': return 'text-green-600 bg-green-50 border-green-200';
+      case 'Loss': return 'text-red-600 bg-red-50 border-red-200';
+      case 'Tie': return 'text-yellow-600 bg-yellow-50 border-yellow-200';
+      default: return 'text-gray-600 bg-gray-50 border-gray-200';
     }
   };
 
   const getGameResult = (game) => {
-    // Handle legacy games that might not have the new goal tracking data
     if (game.gameResult) {
       return game.gameResult;
     }
-    // For older games without live tracking, show "No Result"
     return 'No Result';
   };
 
   const getGameScore = (game) => {
-    // Handle legacy games
     if (game.ourGoals !== undefined && game.theirGoals !== undefined) {
       return `${game.ourGoals} - ${game.theirGoals}`;
     }
-    // For older games without live tracking
     return 'No Score';
+  };
+
+  // Helper function to check if a stat category has any values > 0
+  const hasStats = (game, fields) => {
+    return fields.some(field => (game[field] || 0) > 0);
   };
 
   // Helper functions for time conversion
@@ -79,11 +80,8 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
       cards: game.cards || 0,
       gkShotsSaved: game.gkShotsSaved || 0,
       gkGoalsAgainst: game.gkGoalsAgainst || 0,
-      // NEW: Add player time editing (convert from display format to editable format)
       playerMinutesPlayed: game.playerMinutesPlayed || '0:00',
-      // NEW: Add game notes editing
       gameNotes: game.gameNotes || '',
-      // NEW: Add goal history for editing
       goalHistory: {
         our: game.goalHistory?.our ? [...game.goalHistory.our] : [],
         their: game.goalHistory?.their ? [...game.goalHistory.their] : []
@@ -101,16 +99,14 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
     const confirmMessage = `Delete game: ${game.date || 'No date'} vs ${game.opponent || 'No opponent'}?`;
     
     if (window.confirm(confirmMessage)) {
-      // Find the actual index in the full savedGames array
       const actualIndex = savedGames.findIndex(g => g === game);
-      
       if (onDeleteGame && actualIndex !== -1) {
         onDeleteGame(actualIndex);
       }
     }
   };
 
-  // NEW: Goal editing functions
+  // Goal editing functions
   const addOurGoal = () => {
     const newGoal = {
       time: '0:00',
@@ -188,19 +184,15 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
 
   const saveEdit = () => {
     if (onUpdateGame) {
-      // Validate edited data
       const validateStats = (stats) => {
         const warnings = [];
         
-        // Goals cannot exceed shots
         if ((stats.goalsLeft || 0) > (stats.shotsLeft || 0)) {
           warnings.push('Left foot goals exceed shots');
         }
         if ((stats.goalsRight || 0) > (stats.shotsRight || 0)) {
           warnings.push('Right foot goals exceed shots');
         }
-        
-        // Corner conversions cannot exceed corners taken
         if ((stats.cornerConversions || 0) > (stats.cornersTaken || 0)) {
           warnings.push('Corner conversions exceed corners taken');
         }
@@ -217,21 +209,15 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
       }
 
       const gameIndex = savedGames.findIndex(g => g === filteredGames[editingGame]);
-      
-      // Convert player time to seconds for storage
       const playerSeconds = parseTimeToSeconds(editFormData.playerMinutesPlayed);
       
-      // Recalculate derived values
       const updatedGame = {
         ...filteredGames[editingGame],
         ...editFormData,
-        // Update goal counts based on actual goal history length
         ourGoals: editFormData.goalHistory.our.length,
         theirGoals: editFormData.goalHistory.their.length,
-        // Store both formats for player time
         playerMinutesPlayed: editFormData.playerMinutesPlayed,
         playerSecondsPlayed: playerSeconds,
-        // Calculated stats
         totalGoals: (editFormData.goalsLeft || 0) + (editFormData.goalsRight || 0),
         totalShots: (editFormData.shotsLeft || 0) + (editFormData.shotsRight || 0),
         goalConversionRate: ((editFormData.shotsLeft || 0) + (editFormData.shotsRight || 0)) > 0 ? 
@@ -285,9 +271,9 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
         )}
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {filteredGames.map((game, index) => (
-          <div key={index} className="border rounded-lg overflow-hidden">
+          <div key={index} className="border rounded-lg overflow-hidden bg-white shadow-sm">
             {/* Clickable Header */}
             <button
               onClick={() => toggleGame(index)}
@@ -295,24 +281,29 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
             >
               <div className="flex justify-between items-center">
                 <div className="flex-1">
-                  <div className="font-semibold">
-                    {game.date || 'No date'} vs {game.opponent || 'No opponent'}
+                  <div className="font-semibold text-gray-900">
+                    {game.playerName || 'Player'} vs {game.opponent || 'Opponent'}
                   </div>
-                  <div className={`text-sm font-medium ${getResultColor(getGameResult(game))}`}>
-                    {getGameScore(game)} ({getGameResult(game)})
+                  <div className="text-sm text-gray-500">
+                    {game.date || 'No date'} • {game.playerMinutesPlayed || '0:00'} played
                   </div>
                 </div>
-                <div className="text-gray-400">
-                  {expandedGame === index ? '▼' : '▶'}
+                <div className="flex items-center gap-3">
+                  <div className={`px-3 py-1 rounded-full text-sm font-medium border ${getResultColor(getGameResult(game))}`}>
+                    {getGameScore(game)} ({getGameResult(game)})
+                  </div>
+                  <div className="text-gray-400">
+                    {expandedGame === index ? '▼' : '▶'}
+                  </div>
                 </div>
               </div>
             </button>
 
             {/* Expanded Details */}
             {expandedGame === index && (
-              <div className="p-4 bg-white border-t">
+              <div className="p-6 bg-white border-t">
                 {editingGame === index ? (
-                  // Edit Mode
+                  // Edit Mode (keeping existing edit functionality)
                   <div className="space-y-3">
                     <h4 className="font-semibold mb-3">Edit Game</h4>
                     
@@ -347,7 +338,7 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
                       </div>
                     </div>
 
-                    {/* NEW: Player Time */}
+                    {/* Player Time */}
                     <div>
                       <label className="block text-sm font-medium mb-1">Player Time Played (MM:SS)</label>
                       <input
@@ -361,7 +352,7 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
                       <div className="text-xs text-gray-500 mt-1">Format: MM:SS (e.g., 25:30 for 25 minutes 30 seconds)</div>
                     </div>
 
-                    {/* NEW: Goal Timeline Editing */}
+                    {/* Goal Timeline Editing */}
                     <div>
                       <h5 className="font-medium mb-2">Goal Timeline</h5>
                       
@@ -594,7 +585,7 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
                       </div>
                     </div>
 
-                    {/* NEW: Game Notes */}
+                    {/* Game Notes */}
                     <div>
                       <label className="block text-sm font-medium mb-1">Game Notes/Comments</label>
                       <textarea
@@ -627,81 +618,186 @@ export default function GameHistory({ savedGames, onUpdateGame, onDeleteGame }) 
                     </div>
                   </div>
                 ) : (
-                  // View Mode
-                  <div>
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
-                        <div>
-                          <h4 className="font-semibold mb-2">Game Info</h4>
-                          <p><strong>Player:</strong> {game.playerName || 'Not set'}</p>
-                          <p><strong>Final Score:</strong> {getGameScore(game)}</p>
-                          <p><strong>Result:</strong> <span className={getResultColor(getGameResult(game))}>{getGameResult(game)}</span></p>
-                          <p><strong>Player Time:</strong> {game.playerMinutesPlayed}</p>
+                  // IMPROVED VIEW MODE
+                  <div className="space-y-6">
+                    {/* Game Summary Card - Hero Section */}
+                    <div className={`p-4 rounded-lg border-2 ${getResultColor(getGameResult(game))}`}>
+                      <div className="text-center">
+                        <div className="text-3xl font-bold mb-2">
+                          {getGameScore(game)}
                         </div>
-                        
-                        <div>
-                          <h4 className="font-semibold mb-2">Personal Stats</h4>
-                          <p><strong>Personal Goals:</strong> {game.goalsLeft} L + {game.goalsRight} R = {game.totalGoals}</p>
-                          <p><strong>Shots:</strong> {game.shotsLeft} L + {game.shotsRight} R = {game.totalShots}</p>
-                          <p><strong>Assists:</strong> {game.assists}</p>
-                          <p><strong>Pass Completions:</strong> {game.passCompletions}</p>
+                        <div className="text-lg font-semibold mb-1">
+                          {getGameResult(game)}
                         </div>
-                      </div>
-                      
-                      <div className="flex gap-2 ml-4">
-                        <button
-                          onClick={() => startEditing(index)}
-                          className="bg-blue-500 text-white px-3 py-1 rounded text-sm"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(index)}
-                          className="bg-red-500 text-white px-3 py-1 rounded text-sm"
-                        >
-                          Delete
-                        </button>
+                        <div className="text-sm opacity-75">
+                          {game.date || 'No date'} • {game.playerMinutesPlayed || '0:00'} played
+                        </div>
                       </div>
                     </div>
 
-                    {/* Goal Timeline */}
+                    {/* Action Buttons */}
+                    <div className="flex gap-2 justify-center">
+                      <button
+                        onClick={() => startEditing(index)}
+                        className="bg-blue-500 text-white px-4 py-2 rounded text-sm"
+                      >
+                        Edit Game
+                      </button>
+                      <button
+                        onClick={() => handleDelete(index)}
+                        className="bg-red-500 text-white px-4 py-2 rounded text-sm"
+                      >
+                        Delete Game
+                      </button>
+                    </div>
+
+                    {/* Goal Timeline - Prominent Display */}
                     {game.goalHistory && (game.goalHistory.our.length > 0 || game.goalHistory.their.length > 0) && (
-                      <div className="mt-4">
-                        <h4 className="font-semibold mb-2">Goal Timeline</h4>
-                        <div className="text-sm space-y-1">
+                      <div className="bg-blue-50 p-4 rounded-lg">
+                        <h4 className="font-semibold mb-3 text-center text-blue-900">Goal Timeline</h4>
+                        <div className="space-y-2">
                           {[...game.goalHistory.our.map(g => ({...g, type: 'us'})), 
                             ...game.goalHistory.their.map(g => ({...g, type: 'them'}))]
                             .sort((a, b) => a.timestamp - b.timestamp)
                             .map((goal, goalIndex) => (
-                              <div key={goalIndex} className={`${goal.type === 'us' ? 'text-green-600' : 'text-red-600'}`}>
-                                {goal.time} - {goal.type === 'us' ? 'Us' : 'Them'} (min {goal.minute})
+                              <div key={goalIndex} className={`flex justify-between items-center p-2 rounded ${
+                                goal.type === 'us' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                              }`}>
+                                <span className="font-medium">
+                                  {goal.type === 'us' ? '⚽ Us' : '⚽ Them'}
+                                </span>
+                                <span className="font-mono text-sm">
+                                  {goal.time} (min {goal.minute})
+                                </span>
                               </div>
                             ))}
                         </div>
                       </div>
                     )}
 
-                    {/* NEW: Display Game Notes */}
+                    {/* Conditional Stats Sections - Only show if stats exist */}
+                    <div className="grid gap-4">
+                      
+                      {/* Scoring Stats */}
+                      {hasStats(game, ['goalsLeft', 'goalsRight', 'shotsLeft', 'shotsRight']) && (
+                        <div className="bg-orange-50 p-4 rounded-lg">
+                          <h4 className="font-semibold mb-3 text-orange-900">Scoring</h4>
+                          <div className="grid grid-cols-2 gap-4">
+                            {(game.totalGoals || 0) > 0 && (
+                              <div className="text-center">
+                                <div className="text-2xl font-bold text-orange-600">
+                                  {game.totalGoals}
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                  Personal Goals ({game.goalsLeft}L + {game.goalsRight}R)
+                                </div>
+                              </div>
+                            )}
+                            {(game.totalShots || 0) > 0 && (
+                              <div className="text-center">
+                                <div className="text-2xl font-bold text-orange-600">
+                                  {game.totalShots}
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                  Shots ({game.shotsLeft}L + {game.shotsRight}R)
+                                </div>
+                                {game.goalConversionRate && game.goalConversionRate !== '0%' && (
+                                  <div className="text-xs text-orange-700 font-medium">
+                                    {game.goalConversionRate} conversion
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Playmaking Stats */}
+                      {hasStats(game, ['assists', 'passCompletions', 'cornersTaken', 'cornerConversions']) && (
+                        <div className="bg-purple-50 p-4 rounded-lg">
+                          <h4 className="font-semibold mb-3 text-purple-900">Playmaking</h4>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-center">
+                            {(game.assists || 0) > 0 && (
+                              <div>
+                                <div className="text-xl font-bold text-purple-600">{game.assists}</div>
+                                <div className="text-sm text-gray-600">Assists</div>
+                              </div>
+                            )}
+                            {(game.passCompletions || 0) > 0 && (
+                              <div>
+                                <div className="text-xl font-bold text-purple-600">{game.passCompletions}</div>
+                                <div className="text-sm text-gray-600">Pass Completions</div>
+                              </div>
+                            )}
+                            {(game.cornersTaken || 0) > 0 && (
+                              <div>
+                                <div className="text-xl font-bold text-purple-600">{game.cornersTaken}</div>
+                                <div className="text-sm text-gray-600">
+                                  Corners Taken
+                                  {(game.cornerConversions || 0) > 0 && (
+                                    <div className="text-xs text-purple-700">
+                                      {game.cornerConversions} converted ({game.cornerConversionRate})
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Discipline Stats */}
+                      {hasStats(game, ['fouls', 'cards']) && (
+                        <div className="bg-yellow-50 p-4 rounded-lg">
+                          <h4 className="font-semibold mb-3 text-yellow-900">Discipline</h4>
+                          <div className="grid grid-cols-2 gap-4 text-center">
+                            {(game.fouls || 0) > 0 && (
+                              <div>
+                                <div className="text-xl font-bold text-yellow-600">{game.fouls}</div>
+                                <div className="text-sm text-gray-600">Fouls</div>
+                              </div>
+                            )}
+                            {(game.cards || 0) > 0 && (
+                              <div>
+                                <div className="text-xl font-bold text-yellow-600">{game.cards}</div>
+                                <div className="text-sm text-gray-600">Cards</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Goalkeeping Stats */}
+                      {hasStats(game, ['gkShotsSaved', 'gkGoalsAgainst']) && (
+                        <div className="bg-cyan-50 p-4 rounded-lg">
+                          <h4 className="font-semibold mb-3 text-cyan-900">Goalkeeping</h4>
+                          <div className="grid grid-cols-2 gap-4 text-center">
+                            {(game.gkShotsSaved || 0) > 0 && (
+                              <div>
+                                <div className="text-xl font-bold text-cyan-600">{game.gkShotsSaved}</div>
+                                <div className="text-sm text-gray-600">Shots Saved</div>
+                              </div>
+                            )}
+                            {(game.gkGoalsAgainst || 0) > 0 && (
+                              <div>
+                                <div className="text-xl font-bold text-cyan-600">{game.gkGoalsAgainst}</div>
+                                <div className="text-sm text-gray-600">Goals Against</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Game Notes */}
                     {game.gameNotes && (
-                      <div className="mt-4">
-                        <h4 className="font-semibold mb-2">Game Notes</h4>
-                        <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded">
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <h4 className="font-semibold mb-2 text-gray-900">Game Notes</h4>
+                        <div className="text-gray-700 leading-relaxed">
                           {game.gameNotes}
                         </div>
                       </div>
                     )}
-
-                    {/* Additional Stats */}
-                    <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-                      <div><strong>Corners:</strong> {game.cornersTaken}</div>
-                      <div><strong>Corner Goals:</strong> {game.cornerConversions}</div>
-                      <div><strong>Fouls:</strong> {game.fouls}</div>
-                      <div><strong>Cards:</strong> {game.cards}</div>
-                      <div><strong>GK Saves:</strong> {game.gkShotsSaved}</div>
-                      <div><strong>GK Goals Against:</strong> {game.gkGoalsAgainst}</div>
-                      <div><strong>Goal Conv.:</strong> {game.goalConversionRate}</div>
-                      <div><strong>Corner Conv.:</strong> {game.cornerConversionRate}</div>
-                    </div>
                   </div>
                 )}
               </div>
