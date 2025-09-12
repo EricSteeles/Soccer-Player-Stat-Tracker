@@ -1,4 +1,4 @@
-// Version 2.1 - Final corrected version with visible field and favicon
+// Version 2.2 - Much more visible soccer field
 import React, { useState } from 'react';
 
 export default function PinEntry({ onPinSubmit }) {
@@ -38,19 +38,19 @@ export default function PinEntry({ onPinSubmit }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center p-4">
       <div className="relative rounded-lg shadow-2xl p-8 w-full max-w-md overflow-hidden">
-        {/* Soccer field background - Made much more visible */}
+        {/* Soccer field background - Made MUCH more visible */}
         <div 
           className="absolute inset-0"
           style={{
-            backgroundImage: `url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><defs><pattern id="grass" patternUnits="userSpaceOnUse" width="20" height="20"><rect width="20" height="20" fill="%2322c55e"/><rect width="20" height="20" fill="%2316a34a" opacity="0.8"/></pattern></defs><rect width="800" height="600" fill="url(%23grass)"/><g fill="none" stroke="white" stroke-width="4" opacity="0.9"><rect x="50" y="50" width="700" height="500"/><line x1="400" y1="50" x2="400" y2="550"/><circle cx="400" cy="300" r="80"/><circle cx="400" cy="300" r="3" fill="white"/><rect x="50" y="200" width="100" height="200"/><rect x="650" y="200" width="100" height="200"/><rect x="50" y="250" width="50" height="100"/><rect x="700" y="250" width="50" height="100"/><path d="M 150 200 A 80 80 0 0 0 150 400"/><path d="M 650 200 A 80 80 0 0 1 650 400"/><circle cx="150" cy="300" r="3" fill="white"/><circle cx="650" cy="300" r="3" fill="white"/><path d="M 50 100 A 20 20 0 0 1 70 80 L 730 80 A 20 20 0 0 1 750 100"/><path d="M 50 500 A 20 20 0 0 0 70 520 L 730 520 A 20 20 0 0 0 750 500"/></g></svg>')`,
+            backgroundImage: `url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><defs><pattern id="grass" patternUnits="userSpaceOnUse" width="20" height="20"><rect width="20" height="20" fill="%2315803d"/><rect width="20" height="20" fill="%2322c55e" opacity="0.7"/></pattern></defs><rect width="800" height="600" fill="url(%23grass)"/><g fill="none" stroke="white" stroke-width="5" opacity="1"><rect x="50" y="50" width="700" height="500"/><line x1="400" y1="50" x2="400" y2="550"/><circle cx="400" cy="300" r="80"/><circle cx="400" cy="300" r="4" fill="white"/><rect x="50" y="200" width="100" height="200"/><rect x="650" y="200" width="100" height="200"/><rect x="50" y="250" width="50" height="100"/><rect x="700" y="250" width="50" height="100"/><path d="M 150 200 A 80 80 0 0 0 150 400"/><path d="M 650 200 A 80 80 0 0 1 650 400"/><circle cx="150" cy="300" r="4" fill="white"/><circle cx="650" cy="300" r="4" fill="white"/><path d="M 50 100 A 20 20 0 0 1 70 80 L 730 80 A 20 20 0 0 1 750 100"/><path d="M 50 500 A 20 20 0 0 0 70 520 L 730 520 A 20 20 0 0 0 750 500"/></g></svg>')`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
-            opacity: 0.25
+            opacity: 0.5
           }}
         ></div>
         
-        {/* Semi-transparent overlay for readability - reduced opacity to show field more */}
-        <div className="absolute inset-0 bg-white bg-opacity-75"></div>
+        {/* Much lighter overlay for readability */}
+        <div className="absolute inset-0 bg-white bg-opacity-60"></div>
         
         {/* Content */}
         <div className="relative z-10">
@@ -61,7 +61,7 @@ export default function PinEntry({ onPinSubmit }) {
                 <img 
                   src="/Favicon.png" 
                   alt="Soccer ball" 
-                  className="w-full h-full drop-shadow-sm" 
+                  className="w-full h-full drop-shadow-md" 
                 />
               </div>
             </div>
@@ -86,7 +86,7 @@ export default function PinEntry({ onPinSubmit }) {
                 value={pin}
                 onChange={handleInputChange}
                 placeholder="1234"
-                className="w-full p-4 border-2 border-gray-300 rounded-lg text-center text-2xl font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white bg-opacity-95"
+                className="w-full p-4 border-2 border-gray-300 rounded-lg text-center text-2xl font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white bg-opacity-98 shadow-sm"
                 maxLength="4"
                 autoComplete="off"
               />
@@ -104,7 +104,7 @@ export default function PinEntry({ onPinSubmit }) {
             </button>
           </form>
 
-          <div className="mt-6 p-4 bg-green-50 bg-opacity-95 rounded-lg border border-green-200">
+          <div className="mt-6 p-4 bg-green-50 bg-opacity-98 rounded-lg border border-green-200 shadow-sm">
             <h3 className="font-semibold text-green-900 mb-3">What You Can Track:</h3>
             <div className="grid grid-cols-2 gap-2 text-sm text-green-800">
               <div>• Goals & shots by foot</div>
@@ -118,7 +118,7 @@ export default function PinEntry({ onPinSubmit }) {
             </div>
           </div>
 
-          <div className="mt-4 p-4 bg-blue-50 bg-opacity-95 rounded-lg border border-blue-200">
+          <div className="mt-4 p-4 bg-blue-50 bg-opacity-98 rounded-lg border border-blue-200 shadow-sm">
             <h3 className="font-semibold text-blue-900 mb-2">Multiple Players:</h3>
             <ul className="text-sm text-blue-800 space-y-1">
               <li>• Each PIN tracks a different player's stats</li>
