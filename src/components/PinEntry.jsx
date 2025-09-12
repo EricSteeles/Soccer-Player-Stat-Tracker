@@ -1,3 +1,4 @@
+// Version 2.1 - Final corrected version with visible field and favicon
 import React, { useState } from 'react';
 
 export default function PinEntry({ onPinSubmit }) {
