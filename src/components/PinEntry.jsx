@@ -38,8 +38,13 @@ export default function PinEntry({ onPinSubmit }) {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">⚽ Soccer Stats</h1>
-          <p className="text-gray-600">Enter your 4-digit PIN to access your game data across all devices</p>
+          <h1 className="text-3xl font-bold text-gray-800 mb-4">Soccer Stat Tracker</h1>
+          <p className="text-gray-700 text-lg mb-2">
+            Track comprehensive soccer statistics and game performance
+          </p>
+          <p className="text-gray-600 text-sm">
+            Enter your 4-digit PIN to access your detailed stats, game history, and analytics across all devices
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -67,23 +72,38 @@ export default function PinEntry({ onPinSubmit }) {
             disabled={isSubmitting || pin.length !== 4}
             className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
           >
-            {isSubmitting ? 'Loading...' : 'Access My Stats'}
+            {isSubmitting ? 'Loading Stats...' : 'Access My Stats'}
           </button>
         </form>
 
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-          <h3 className="font-semibold text-gray-800 mb-2">How it works:</h3>
+        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+          <h3 className="font-semibold text-blue-900 mb-3">What You Can Track:</h3>
+          <div className="grid grid-cols-2 gap-2 text-sm text-blue-800">
+            <div>• Goals & shots by foot</div>
+            <div>• Assists & passes</div>
+            <div>• 1v1 situations</div>
+            <div>• Corner kicks</div>
+            <div>• Defensive stats</div>
+            <div>• Game timelines</div>
+            <div>• Win/loss records</div>
+            <div>• Export to CSV</div>
+          </div>
+        </div>
+
+        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+          <h3 className="font-semibold text-gray-800 mb-2">Multiple Players:</h3>
           <ul className="text-sm text-gray-600 space-y-1">
-            <li>• Choose any 4-digit PIN you'll remember</li>
-            <li>• Use the same PIN on all your devices</li>
-            <li>• Your games sync automatically across devices</li>
+            <li>• Each PIN tracks a different player's stats</li>
+            <li>• Perfect for parents with multiple kids</li>
+            <li>• Use PIN 1234 for one child, 5678 for another</li>
+            <li>• All data syncs across your devices automatically</li>
             <li>• No accounts or passwords needed</li>
           </ul>
         </div>
 
         <div className="mt-4 text-center">
           <p className="text-xs text-gray-500">
-            Your PIN is stored securely and used only to sync your personal game data
+            Your PIN and game data are stored securely and used only for syncing your personal statistics
           </p>
         </div>
       </div>

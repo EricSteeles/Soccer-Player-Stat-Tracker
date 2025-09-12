@@ -1,3 +1,4 @@
+// Version 1.3 - Force fresh build - Switch Player fix
 import React, { useState, useEffect } from "react";
 import GameStats from "./components/GameStats";
 import PinEntry from "./components/PinEntry";
@@ -22,6 +23,14 @@ function App() {
     setUserPin(pin);
   };
 
+  // ADD THIS FUNCTION - handles switching back to PIN entry
+  const handleSwitchPlayer = () => {
+    // Clear the current PIN from gameService
+    gameService.clearPin();
+    // Reset userPin to null to show PIN entry screen
+    setUserPin(null);
+  };
+
   if (isCheckingPin) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -37,7 +46,7 @@ function App() {
     <ErrorBoundary>
       <div className="min-h-screen bg-gray-100">
         {userPin ? (
-          <GameStats userPin={userPin} />
+          <GameStats userPin={userPin} onSwitchPlayer={handleSwitchPlayer} />
         ) : (
           <PinEntry onPinSubmit={handlePinSubmit} />
         )}
