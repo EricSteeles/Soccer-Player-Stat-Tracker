@@ -22,9 +22,17 @@ function App() {
     setUserPin(pin);
   };
 
+<<<<<<< HEAD
   const handleSwitchPlayer = () => {
     // Clear the current PIN and show PIN entry screen
     gameService.clearPin();
+=======
+  // ADD THIS FUNCTION - handles switching back to PIN entry
+  const handleSwitchPlayer = () => {
+    // Clear the current PIN from gameService
+    gameService.clearPin();
+    // Reset userPin to null to show PIN entry screen
+>>>>>>> 2873ec8f38840705db64a0d6425382408faf0668
     setUserPin(null);
   };
 
